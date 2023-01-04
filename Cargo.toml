@@ -1,5 +1,5 @@
 [package]
-name = "ds-tester"
+name = "ovn-ci"
 version = "0.1.0"
 authors = ["Ales Musil <amusil@redhat.com>"]
 edition = "2021"
