@@ -9,11 +9,20 @@ use crate::config::Configuration;
 use crate::git::Git;
 use crate::runner::{Finished, Runner};
 
+macro_rules! _propagate_soft_error {
+    ($failure: expr, $($arg:tt)*) => {
+        {
+            $failure = true;
+            eprintln!($($arg)*);
+        }
+    }
+}
+
 macro_rules! _push_finished_on_success {
-    ($finished: expr, $runner: ident) => {
+    ($finished: expr, $failure: expr, $runner: ident) => {
         match $runner.finish() {
             Ok(runner) => $finished.push(runner),
-            Err(e) => eprintln!("{}", e),
+            Err(e) => _propagate_soft_error!($failure, "{}", e),
         }
     };
 }
@@ -21,6 +30,7 @@ macro_rules! _push_finished_on_success {
 pub struct ContinuousIntegration {
     config: Configuration,
     finished: Vec<Runner<Finished>>,
+    failure: bool,
 }
 
 impl ContinuousIntegration {
@@ -28,6 +38,7 @@ impl ContinuousIntegration {
         ContinuousIntegration {
             config,
             finished: Vec::new(),
+            failure: false,
         }
     }
 
@@ -51,7 +62,9 @@ impl ContinuousIntegration {
             let name = runner.name();
             match runner.run(&path) {
                 Ok(runner) => running.push_back(runner),
-                Err(e) => eprintln!("Could not run start suite \"{}\":\n{}", name, e),
+                Err(e) => {
+                    _propagate_soft_error!(self.failure, "Could not start job \"{}\":\n{}", name, e)
+                }
             }
         }
 
@@ -59,11 +72,12 @@ impl ContinuousIntegration {
             if let Some(mut runner) = running.pop_front() {
                 match runner.try_wait() {
                     // Propagate finished
-                    Ok(true) => _push_finished_on_success!(self.finished, runner),
+                    Ok(true) => _push_finished_on_success!(self.finished, self.failure, runner),
                     // Return unfinished back to queue
                     Ok(false) => running.push_back(runner),
                     // Print error is something went wrong with the wait
-                    Err(e) => eprintln!(
+                    Err(e) => _propagate_soft_error!(
+                        self.failure,
                         "Failed to wait for \"{}\" runner to finish:\n{}",
                         runner.name(),
                         e
@@ -72,8 +86,12 @@ impl ContinuousIntegration {
             }
         }
 
-        for result in self.finished.iter() {
-            println!("{}", result.report_console());
+        for runner in self.finished.iter() {
+            println!("{}", runner.report_console());
+        }
+
+        if self.should_fail() {
+            return Err(anyhow::anyhow!("At least one job failed!"));
         }
 
         Ok(())
@@ -90,5 +108,9 @@ impl ContinuousIntegration {
             .map_err(|e| anyhow::anyhow!("Cannot create log directory:\n{}", e))?;
 
         Ok(path)
+    }
+
+    fn should_fail(&self) -> bool {
+        self.failure || self.finished.iter().any(|runner| !runner.success())
     }
 }

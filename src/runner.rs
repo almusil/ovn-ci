@@ -111,7 +111,7 @@ impl Runner<Running> {
         let mut proc = self.state.proc;
         let status = proc
             .wait()
-            .map_err(|e| anyhow::anyhow!("Could not finish \"{}\" runner:\n{}", self.name, e))?;
+            .map_err(|e| anyhow::anyhow!("Could not finish job \"{}\":\n{}", self.name, e))?;
 
         Ok(Runner {
             name: self.name,
@@ -125,6 +125,10 @@ impl Runner<Running> {
 }
 
 impl Runner<Finished> {
+    pub fn success(&self) -> bool {
+        self.state.success
+    }
+
     pub fn report_console(&self) -> String {
         format!(
             "The job \"{}\" is done. Status: {}, Duration: {:?}, Return code: {}",
