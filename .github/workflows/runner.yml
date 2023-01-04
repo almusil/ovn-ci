@@ -1,0 +1,46 @@
+name: CI test
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  basic:
+    name: Run basic scenario
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: APT update
+        run: sudo apt update
+
+      - name: Install dependencies
+        run: sudo apt install -y git make podman
+
+      # TODO: Change it to u/s once the patch is merged
+      - name: Clone OVN repository
+        run: git clone -b add_container_automation https://github.com/almusil/ovn.git --depth 1 /tmp/ovn
+
+      - name: Initialize OvS submodule
+        working-directory: /tmp/ovn
+        run: git submodule update --init --depth 1
+
+      - name: Build the ovn-ci
+        run: cargo build
+
+      - name: Build the Fedora image
+        working-directory: /tmp/ovn/utilities/containers
+        run: make build
+
+      - name: Run the ovn-ci with minimal.yaml
+        run: sudo ./target/debug/ovn-ci config/minimal.yaml
+
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: logs
+          path: /tmp/ovn_ci
