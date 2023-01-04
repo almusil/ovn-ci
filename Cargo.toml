@@ -1,0 +1,14 @@
+[package]
+name = "ds-tester"
+version = "0.1.0"
+authors = ["Ales Musil <amusil@redhat.com>"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde_yaml = "0.9"
+
+anyhow = { version = "1.0", features = ["backtrace"] }
+chrono = { version = "0.4", features = ["clock", "std"], default-features = false }
+serde = { version = "1.0", features = ["derive"] }
