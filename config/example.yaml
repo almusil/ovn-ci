@@ -1,0 +1,57 @@
+jobs: 40
+log_path: /tmp/ovn_ci
+
+git:
+  ovn_path: /tmp/ovn
+  ovs_path: /tmp/ovn/ovs
+  update: true
+
+suites:
+  - name: Compile
+    compiler: gcc
+    options: --disable-ssl
+
+  - name: Compile
+    compiler: clang
+    options: --disable-ssl
+
+  - name: Tests
+    compiler: gcc
+    type: unit
+
+  - name: Tests
+    compiler: clang
+    type: unit
+
+  - name: Tests
+    compiler: clang
+    type: unit
+    sanitizers: true
+    test_range: -500
+
+  - name: Tests
+    compiler: clang
+    type: unit
+    sanitizers: true
+    test_range: 501-1000
+
+  - name: Tests
+    compiler: clang
+    type: unit
+    sanitizers: true
+    test_range: 1001-
+
+  - name: Tests
+    compiler: gcc
+    type: system
+    test_range: -100
+
+  - name: Tests
+    compiler: gcc
+    type: system
+    test_range: 101-200
+
+  - name: Tests
+    compiler: gcc
+    type: system
+    test_range: 201-
