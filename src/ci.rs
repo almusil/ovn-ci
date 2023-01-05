@@ -1,6 +1,8 @@
 use std::collections::VecDeque;
 use std::fs::DirBuilder;
 use std::path::PathBuf;
+use std::thread;
+use std::time::Duration;
 
 use anyhow::Result;
 use chrono::Local;
@@ -87,6 +89,8 @@ impl ContinuousIntegration {
                     ),
                 }
             }
+
+            thread::sleep(Duration::from_millis(100));
         }
 
         for runner in self.finished.iter() {
