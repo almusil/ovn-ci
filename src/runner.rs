@@ -39,7 +39,7 @@ impl<S> Runner<S> {
 }
 
 impl Runner<New> {
-    pub fn new(jobs: usize, git: &Git, suite: &Suite) -> Self {
+    pub fn new(jobs: usize, image_name: Option<&str>, git: &Git, suite: &Suite) -> Self {
         let mut command = Command::new(SCRIPT);
 
         let ovn_path = format!("--ovn-path={}", git.ovn_path());
@@ -50,6 +50,11 @@ impl Runner<New> {
 
         let jobs = format!("--jobs={}", jobs);
         command.arg(&jobs);
+
+        if let Some(name) = image_name {
+            let image_name = format!("--image-name={}", name);
+            command.arg(&image_name);
+        }
 
         suite.envs().into_iter().for_each(|(key, val)| {
             command.env(key, val);
