@@ -1,5 +1,6 @@
 jobs: 2
 log_path: /tmp/ovn_ci
+image_name: quay.io/almusil/ovn-tests
 
 git:
   ovn_path: /tmp/ovn

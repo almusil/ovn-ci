@@ -51,11 +51,14 @@ impl ContinuousIntegration {
             Git::new(git_config.ovs_path()).update()?;
         }
 
-        let runners = self
-            .config
-            .suites()
-            .iter()
-            .map(|suite| Runner::new(self.config.jobs(), self.config.git(), suite));
+        let runners = self.config.suites().iter().map(|suite| {
+            Runner::new(
+                self.config.jobs(),
+                self.config.image_name(),
+                self.config.git(),
+                suite,
+            )
+        });
 
         let mut running = VecDeque::new();
         for runner in runners {

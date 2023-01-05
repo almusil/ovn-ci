@@ -9,6 +9,8 @@ use serde::Deserialize;
 pub struct Configuration {
     jobs: usize,
     log_path: String,
+    #[serde(default)]
+    image_name: Option<String>,
     git: Git,
     suites: Vec<Suite>,
 }
@@ -26,6 +28,10 @@ impl Configuration {
 
     pub fn log_path(&self) -> &str {
         &self.log_path
+    }
+
+    pub fn image_name(&self) -> Option<&str> {
+        self.image_name.as_deref()
     }
 
     pub fn git(&self) -> &Git {
