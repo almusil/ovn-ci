@@ -136,11 +136,18 @@ impl Runner<Finished> {
 
     pub fn report_console(&self) -> String {
         format!(
-            "The job \"{}\" is done. Status: {}, Duration: {:?}, Return code: {}",
+            "The job \"{}\" is done. Status: {}, Duration: {}, Return code: {}",
             self.name,
             if self.state.success { "Ok" } else { "Fail" },
-            self.state.duration,
+            self.format_duration(),
             self.state.code
         )
+    }
+
+    fn format_duration(&self) -> String {
+        let millis = self.state.duration.as_millis();
+        let secs = millis / 1000;
+        let minutes = secs / 60;
+        format!("{:02}m {:02}s {:03}ms", minutes, secs % 60, millis % 1000)
     }
 }
