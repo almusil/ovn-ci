@@ -21,9 +21,8 @@ jobs:
       - name: Install dependencies
         run: sudo apt install -y git make podman
 
-      # TODO: Change it to u/s once the patch is merged
       - name: Clone OVN repository
-        run: git clone -b add_container_automation https://github.com/almusil/ovn.git --depth 1 /tmp/ovn
+        run: git clone https://github.com/ovn-org/ovn.git --depth 1 /tmp/ovn
 
       - name: Initialize OvS submodule
         working-directory: /tmp/ovn

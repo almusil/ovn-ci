@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 
 use crate::config::{Git, Suite};
-const SCRIPT: &str = "./utilities/containers/ci.sh";
+const SCRIPT: &str = "./.ci/ci.sh";
 
 #[derive(Debug)]
 pub struct New {
