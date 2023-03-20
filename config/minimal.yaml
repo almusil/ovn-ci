@@ -1,6 +1,6 @@
 jobs: 2
 log_path: /tmp/ovn_ci
-image_name: quay.io/almusil/ovn-tests
+image_name: ghcr.io/ovn-org/ovn-tests:fedora
 
 git:
   ovn_path: /tmp/ovn
