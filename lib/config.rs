@@ -23,6 +23,7 @@ pub struct Configuration {
     log_path: String,
     #[serde(default)]
     image_name: Option<String>,
+    concurrent_limit: Option<usize>,
     git: Git,
     suites: Vec<Suite>,
 }
@@ -44,6 +45,10 @@ impl Configuration {
 
     pub fn image_name(&self) -> Option<&str> {
         self.image_name.as_deref()
+    }
+
+    pub fn concurrent_limit(&self) -> Option<usize> {
+        self.concurrent_limit
     }
 
     pub fn git(&self) -> &Git {
