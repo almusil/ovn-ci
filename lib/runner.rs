@@ -33,6 +33,7 @@ macro_rules! _runner_error {
 #[derive(Debug)]
 pub struct New {
     command: Command,
+    log_path: PathBuf,
 }
 
 #[derive(Debug)]
@@ -60,7 +61,15 @@ impl<S> Runner<S> {
 }
 
 impl Runner<New> {
-    pub fn new(jobs: usize, image_name: Option<&str>, git: &Git, suite: &Suite) -> Self {
+    pub fn new(
+        jobs: usize,
+        image_name: Option<&str>,
+        git: &Git,
+        suite: &Suite,
+        log_path: &Path,
+    ) -> Self {
+        let name = suite.name();
+
         let mut command = Command::new(SCRIPT);
 
         let ovn_path = format!("--ovn-path={}", git.ovn_path());
@@ -83,15 +92,31 @@ impl Runner<New> {
 
         command.current_dir(git.ovn_path());
 
+        let mut log_path = PathBuf::from(log_path);
+        log_path.push(name.to_lowercase().replace(' ', "_"));
+        log_path.set_extension("log");
+
         Runner {
-            name: suite.name(),
-            state: New { command },
+            name,
+            state: New { command, log_path },
         }
     }
 
-    pub fn run(self, path: &Path) -> Result<Runner<Running>, Runner<Finished>> {
+    pub fn report_console(&self) -> String {
+        format!(
+            "The job \"{}\" is starting, log file: {}",
+            self.name,
+            self.state.log_path.to_string_lossy()
+        )
+    }
+
+    pub fn run(self) -> Result<Runner<Running>, Runner<Finished>> {
         let start = Instant::now();
-        let (log, log_clone) = _runner_error!(self.create_log_file(path), self.name(), start)?;
+        let (log, log_clone) = _runner_error!(
+            self.create_log_file(&self.state.log_path),
+            self.name(),
+            start
+        )?;
 
         let mut command = self.state.command;
         command.stdout(log).stderr(log_clone);
@@ -108,11 +133,7 @@ impl Runner<New> {
     }
 
     fn create_log_file(&self, path: &Path) -> Result<(File, File), Error> {
-        let mut path = PathBuf::from(path);
-        path.push(self.name.to_lowercase().replace(' ', "_"));
-        path.set_extension("log");
-
-        let file = File::create(&path).map_err(Error::LogFile)?;
+        let file = File::create(path).map_err(Error::LogFile)?;
         let clone = file.try_clone().map_err(Error::LogFileDescriptor)?;
         Ok((file, clone))
     }
