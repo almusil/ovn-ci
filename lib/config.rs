@@ -107,10 +107,11 @@ impl Compiler {
 }
 
 #[derive(Copy, Clone, Debug, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "kebab-case")]
 enum SuiteType {
     Unit,
     System,
+    SystemUserspace,
 }
 
 impl SuiteType {
@@ -118,6 +119,7 @@ impl SuiteType {
         match self {
             SuiteType::Unit => "test",
             SuiteType::System => "system-test",
+            SuiteType::SystemUserspace => "system-test-userspace",
         }
     }
 
@@ -125,6 +127,7 @@ impl SuiteType {
         match self {
             SuiteType::Unit => "unit",
             SuiteType::System => "system",
+            SuiteType::SystemUserspace => "system-userspace",
         }
     }
 }
@@ -143,6 +146,8 @@ pub struct Suite {
     sanitizers: bool,
     #[serde(default)]
     test_range: Option<String>,
+    #[serde(default)]
+    libs: Option<String>,
 }
 
 impl Suite {
@@ -165,6 +170,10 @@ impl Suite {
 
         if let Some(range) = &self.test_range {
             envs.push(("TEST_RANGE", range.as_str()));
+        }
+
+        if let Some(libs) = &self.libs {
+            envs.push(("LIBS", libs.as_str()));
         }
 
         envs
@@ -191,6 +200,12 @@ impl Suite {
         if let Some(opts) = &self.options {
             name.push_str(" (");
             name.push_str(opts);
+            name.push(')');
+        }
+
+        if let Some(libs) = &self.libs {
+            name.push_str(" (");
+            name.push_str(libs);
             name.push(')');
         }
 
