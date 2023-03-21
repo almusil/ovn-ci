@@ -1,12 +1,34 @@
 use std::fs::File;
+use std::io::Error as IoError;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::time::{Duration, Instant};
 
-use anyhow::Result;
+use thiserror::Error as ThisError;
 
 use crate::config::{Git, Suite};
+
 const SCRIPT: &str = "./.ci/ci.sh";
+
+#[derive(ThisError, Debug)]
+pub enum Error {
+    #[error("Cannot create log file: {0}")]
+    LogFile(#[source] IoError),
+    #[error("Cannot clone log file descriptor: {0}")]
+    LogFileDescriptor(#[source] IoError),
+    #[error("Cannot start runner: {0}")]
+    RunnerStart(#[source] IoError),
+    #[error("Cannot finnish runner job: {0}")]
+    RunnerFinnish(#[source] IoError),
+    #[error("Non-zero return code: {0}")]
+    ReturnCode(i32),
+}
+
+macro_rules! _runner_error {
+    ($e:expr, $name:expr, $start:expr) => {
+        $e.map_err(|e| Runner::<Finished>::new($name, $start, Some(e)))
+    };
+}
 
 #[derive(Debug)]
 pub struct New {
@@ -21,8 +43,7 @@ pub struct Running {
 
 #[derive(Debug)]
 pub struct Finished {
-    success: bool,
-    code: i32,
+    error: Option<Error>,
     duration: Duration,
 }
 
@@ -68,80 +89,84 @@ impl Runner<New> {
         }
     }
 
-    pub fn run(self, path: &Path) -> Result<Runner<Running>> {
-        let log = self.create_log_file(path)?;
-        let log_clone = log.try_clone()?;
+    pub fn run(self, path: &Path) -> Result<Runner<Running>, Runner<Finished>> {
+        let start = Instant::now();
+        let (log, log_clone) = _runner_error!(self.create_log_file(path), self.name(), start)?;
 
         let mut command = self.state.command;
         command.stdout(log).stderr(log_clone);
+        let proc = _runner_error!(
+            command.spawn().map_err(Error::RunnerStart),
+            self.name.clone(),
+            start
+        )?;
 
         Ok(Runner {
             name: self.name,
-            state: Running {
-                start: Instant::now(),
-                proc: command.spawn()?,
-            },
+            state: Running { start, proc },
         })
     }
 
-    fn create_log_file(&self, path: &Path) -> Result<File> {
-        let name = format!("{}.log", self.name.to_lowercase().replace(' ', "_"));
-
+    fn create_log_file(&self, path: &Path) -> Result<(File, File), Error> {
         let mut path = PathBuf::from(path);
-        path.push(name);
+        path.push(self.name.to_lowercase().replace(' ', "_"));
+        path.set_extension("log");
 
-        File::create(&path).map_err(|e| {
-            anyhow::anyhow!(
-                "Cannot create log file \"{}\":\n {}",
-                path.to_string_lossy(),
-                e
-            )
-        })
+        let file = File::create(&path).map_err(Error::LogFile)?;
+        let clone = file.try_clone().map_err(Error::LogFileDescriptor)?;
+        Ok((file, clone))
     }
 }
 
 impl Runner<Running> {
-    pub fn try_wait(&mut self) -> Result<bool> {
+    pub fn try_ready(&mut self) -> bool {
         match self.state.proc.try_wait() {
-            Ok(opt) => Ok(opt.is_some()),
-            Err(e) => Err(anyhow::anyhow!(
-                "Could check status of the child process for \"{}\":\n{}",
-                self.name,
-                e
-            )),
+            Ok(opt) => opt.is_some(),
+            Err(_) => true,
         }
     }
 
-    pub fn finish(self) -> Result<Runner<Finished>> {
+    pub fn finish(self) -> Runner<Finished> {
         let mut proc = self.state.proc;
-        let status = proc
-            .wait()
-            .map_err(|e| anyhow::anyhow!("Could not finish job \"{}\":\n{}", self.name, e))?;
+        let error = match proc.wait() {
+            Ok(status) if status.success() => None,
+            Ok(status) => Some(Error::ReturnCode(status.code().unwrap_or(-1))),
+            Err(e) => Some(Error::RunnerFinnish(e)),
+        };
 
-        Ok(Runner {
-            name: self.name,
-            state: Finished {
-                success: status.success(),
-                code: status.code().unwrap_or_default(),
-                duration: Instant::now().duration_since(self.state.start),
-            },
-        })
+        Runner::<Finished>::new(self.name, self.state.start, error)
     }
 }
 
 impl Runner<Finished> {
+    fn new(name: String, start: Instant, error: Option<Error>) -> Self {
+        Runner {
+            name,
+            state: Finished {
+                error,
+                duration: Instant::now().duration_since(start),
+            },
+        }
+    }
+
     pub fn success(&self) -> bool {
-        self.state.success
+        self.state.error.is_none()
     }
 
     pub fn report_console(&self) -> String {
-        format!(
-            "The job \"{}\" is done. Status: {}, Duration: {}, Return code: {}",
+        let mut report = format!(
+            "The job \"{}\" is done. Duration: {}, Status: ",
             self.name,
-            if self.state.success { "Ok" } else { "Fail" },
-            self.format_duration(),
-            self.state.code
-        )
+            self.format_duration()
+        );
+        match self.state.error.as_ref() {
+            Some(e) => {
+                let err = format!("Fail, {}", e);
+                report.push_str(&err);
+            }
+            None => report.push_str("Ok"),
+        };
+        report
     }
 
     fn format_duration(&self) -> String {

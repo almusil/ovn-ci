@@ -1,8 +1,20 @@
 use std::fs::File;
+use std::io::Error as IoError;
 use std::path::Path;
 
-use anyhow::Result;
 use serde::Deserialize;
+use serde_yaml::Error as YamlError;
+use thiserror::Error as ThisError;
+
+pub type Result<T> = std::result::Result<T, Error>;
+
+#[derive(ThisError, Debug)]
+pub enum Error {
+    #[error("Cannot read config file: {0}")]
+    Read(#[source] IoError),
+    #[error("Cannot read config file: {0}")]
+    Parse(#[source] YamlError),
+}
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -17,8 +29,8 @@ pub struct Configuration {
 
 impl Configuration {
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let file = File::open(path)?;
-        let config: Configuration = serde_yaml::from_reader(file)?;
+        let file = File::open(path).map_err(Error::Read)?;
+        let config: Configuration = serde_yaml::from_reader(file).map_err(Error::Parse)?;
         Ok(config)
     }
 
