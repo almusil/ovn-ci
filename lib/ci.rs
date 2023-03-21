@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::fs::DirBuilder;
 use std::io::Error as IoError;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
 
@@ -10,7 +10,7 @@ use thiserror::Error as ThisError;
 
 use crate::config::Configuration;
 use crate::git::{Error as GitError, Git};
-use crate::runner::{Finished, Runner, Running};
+use crate::runner::{Finished, New, Runner, Running};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -34,7 +34,6 @@ macro_rules! _push_finished_and_report {
 pub struct ContinuousIntegration {
     config: Configuration,
     finished: Vec<Runner<Finished>>,
-    running: VecDeque<Runner<Running>>,
 }
 
 impl ContinuousIntegration {
@@ -42,42 +41,49 @@ impl ContinuousIntegration {
         ContinuousIntegration {
             config,
             finished: Vec::new(),
-            running: VecDeque::new(),
         }
     }
 
     pub fn run(&mut self) -> Result<()> {
-        let path = self.create_log_directory()?;
-
         let git_config = self.config.git();
         if git_config.should_update() {
             Git::new(git_config.ovn_path()).update()?;
             Git::new(git_config.ovs_path()).update()?;
         }
 
-        let runners = self.config.suites().iter().map(|suite| {
-            Runner::new(
-                self.config.jobs(),
-                self.config.image_name(),
-                self.config.git(),
-                suite,
-            )
-        });
+        let log_path = self.create_log_directory()?;
 
-        for runner in runners {
-            match runner.run(&path) {
-                Ok(runner) => self.running.push_back(runner),
-                Err(runner) => _push_finished_and_report!(runner, self),
+        let suites = self.config.suites();
+        let concurrent_limit = self.config.concurrent_limit().unwrap_or(suites.len());
+
+        let mut runners = suites
+            .iter()
+            .map(|suite| {
+                Runner::new(
+                    self.config.jobs(),
+                    self.config.image_name(),
+                    self.config.git(),
+                    suite,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let mut running = VecDeque::with_capacity(concurrent_limit);
+        loop {
+            if running.len() < concurrent_limit {
+                self.schedule_jobs(concurrent_limit, &log_path, &mut runners, &mut running);
             }
-        }
 
-        while !self.running.is_empty() {
-            if let Some(mut runner) = self.running.pop_front() {
+            if running.is_empty() {
+                break;
+            }
+
+            if let Some(mut runner) = running.pop_front() {
                 if runner.try_ready() {
                     let runner = runner.finish();
                     _push_finished_and_report!(runner, self);
                 } else {
-                    self.running.push_back(runner);
+                    running.push_back(runner);
                 }
             }
 
@@ -106,5 +112,22 @@ impl ContinuousIntegration {
 
     fn should_fail(&self) -> bool {
         self.finished.iter().any(|runner| !runner.success())
+    }
+
+    fn schedule_jobs(
+        &mut self,
+        concurrent_limit: usize,
+        log_path: &Path,
+        waiting: &mut Vec<Runner<New>>,
+        running: &mut VecDeque<Runner<Running>>,
+    ) {
+        while !waiting.is_empty() && running.len() < concurrent_limit {
+            if let Some(runner) = waiting.pop() {
+                match runner.run(log_path) {
+                    Ok(runner) => running.push_back(runner),
+                    Err(runner) => _push_finished_and_report!(runner, self),
+                }
+            }
+        }
     }
 }
