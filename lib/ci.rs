@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::fs::DirBuilder;
 use std::io::Error as IoError;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::thread;
 use std::time::Duration;
 
@@ -64,6 +64,7 @@ impl ContinuousIntegration {
                     self.config.image_name(),
                     self.config.git(),
                     suite,
+                    &log_path,
                 )
             })
             .collect::<Vec<_>>();
@@ -71,7 +72,7 @@ impl ContinuousIntegration {
         let mut running = VecDeque::with_capacity(concurrent_limit);
         loop {
             if running.len() < concurrent_limit {
-                self.schedule_jobs(concurrent_limit, &log_path, &mut runners, &mut running);
+                self.schedule_jobs(concurrent_limit, &mut runners, &mut running);
             }
 
             if running.is_empty() {
@@ -117,13 +118,13 @@ impl ContinuousIntegration {
     fn schedule_jobs(
         &mut self,
         concurrent_limit: usize,
-        log_path: &Path,
         waiting: &mut Vec<Runner<New>>,
         running: &mut VecDeque<Runner<Running>>,
     ) {
         while !waiting.is_empty() && running.len() < concurrent_limit {
             if let Some(runner) = waiting.pop() {
-                match runner.run(log_path) {
+                println!("{}", runner.report_console());
+                match runner.run() {
                     Ok(runner) => running.push_back(runner),
                     Err(runner) => _push_finished_and_report!(runner, self),
                 }
