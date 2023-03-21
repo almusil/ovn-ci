@@ -18,6 +18,7 @@ pub enum Error {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[serde(deny_unknown_fields)]
 pub struct Configuration {
     jobs: usize,
     log_path: String,
@@ -62,6 +63,7 @@ impl Configuration {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[serde(deny_unknown_fields)]
 pub struct Git {
     ovn_path: String,
     ovs_path: String,
@@ -85,6 +87,7 @@ impl Git {
 
 #[derive(Copy, Clone, Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[serde(deny_unknown_fields)]
 enum Compiler {
     Gcc,
     Clang,
@@ -108,6 +111,7 @@ impl Compiler {
 
 #[derive(Copy, Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[serde(deny_unknown_fields)]
 enum SuiteType {
     Unit,
     System,
@@ -134,6 +138,7 @@ impl SuiteType {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[serde(deny_unknown_fields)]
 pub struct Suite {
     name: String,
     compiler: Compiler,
