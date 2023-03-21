@@ -1,38 +1,40 @@
 use std::collections::VecDeque;
 use std::fs::DirBuilder;
+use std::io::Error as IoError;
 use std::path::PathBuf;
 use std::thread;
 use std::time::Duration;
 
-use anyhow::Result;
 use chrono::Local;
+use thiserror::Error as ThisError;
 
 use crate::config::Configuration;
-use crate::git::Git;
-use crate::runner::{Finished, Runner};
+use crate::git::{Error as GitError, Git};
+use crate::runner::{Finished, Runner, Running};
 
-macro_rules! _propagate_soft_error {
-    ($failure: expr, $($arg:tt)*) => {
-        {
-            $failure = true;
-            eprintln!($($arg)*);
-        }
-    }
+pub type Result<T> = std::result::Result<T, Error>;
+
+#[derive(ThisError, Debug)]
+pub enum Error {
+    #[error("{0}")]
+    Git(#[from] GitError),
+    #[error("Cannot create log directory structure: {0}")]
+    LogDirectory(#[source] IoError),
+    #[error("At least one job failed")]
+    Failure,
 }
 
-macro_rules! _push_finished_on_success {
-    ($finished: expr, $failure: expr, $runner: ident) => {
-        match $runner.finish() {
-            Ok(runner) => $finished.push(runner),
-            Err(e) => _propagate_soft_error!($failure, "{}", e),
-        }
-    };
+macro_rules! _push_finished_and_report {
+    ($runner: ident, $self: expr) => {{
+        println!("{}", $runner.report_console());
+        $self.finished.push($runner);
+    }};
 }
 
 pub struct ContinuousIntegration {
     config: Configuration,
     finished: Vec<Runner<Finished>>,
-    failure: bool,
+    running: VecDeque<Runner<Running>>,
 }
 
 impl ContinuousIntegration {
@@ -40,7 +42,7 @@ impl ContinuousIntegration {
         ContinuousIntegration {
             config,
             finished: Vec::new(),
-            failure: false,
+            running: VecDeque::new(),
         }
     }
 
@@ -62,43 +64,28 @@ impl ContinuousIntegration {
             )
         });
 
-        let mut running = VecDeque::new();
         for runner in runners {
-            let name = runner.name();
             match runner.run(&path) {
-                Ok(runner) => running.push_back(runner),
-                Err(e) => {
-                    _propagate_soft_error!(self.failure, "Could not start job \"{}\":\n{}", name, e)
-                }
+                Ok(runner) => self.running.push_back(runner),
+                Err(runner) => _push_finished_and_report!(runner, self),
             }
         }
 
-        while !running.is_empty() {
-            if let Some(mut runner) = running.pop_front() {
-                match runner.try_wait() {
-                    // Propagate finished
-                    Ok(true) => _push_finished_on_success!(self.finished, self.failure, runner),
-                    // Return unfinished back to queue
-                    Ok(false) => running.push_back(runner),
-                    // Print error is something went wrong with the wait
-                    Err(e) => _propagate_soft_error!(
-                        self.failure,
-                        "Failed to wait for \"{}\" runner to finish:\n{}",
-                        runner.name(),
-                        e
-                    ),
+        while !self.running.is_empty() {
+            if let Some(mut runner) = self.running.pop_front() {
+                if runner.try_ready() {
+                    let runner = runner.finish();
+                    _push_finished_and_report!(runner, self);
+                } else {
+                    self.running.push_back(runner);
                 }
             }
 
             thread::sleep(Duration::from_millis(100));
         }
 
-        for runner in self.finished.iter() {
-            println!("{}", runner.report_console());
-        }
-
         if self.should_fail() {
-            return Err(anyhow::anyhow!("At least one job failed!"));
+            return Err(Error::Failure);
         }
 
         Ok(())
@@ -112,12 +99,12 @@ impl ContinuousIntegration {
         DirBuilder::new()
             .recursive(true)
             .create(&path)
-            .map_err(|e| anyhow::anyhow!("Cannot create log directory:\n{}", e))?;
+            .map_err(Error::LogDirectory)?;
 
         Ok(path)
     }
 
     fn should_fail(&self) -> bool {
-        self.failure || self.finished.iter().any(|runner| !runner.success())
+        self.finished.iter().any(|runner| !runner.success())
     }
 }

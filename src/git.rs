@@ -1,12 +1,20 @@
+use std::io::Error as IoError;
 use std::process::Command;
 
-use anyhow::Result;
+use thiserror::Error as ThisError;
 
-macro_rules! _check_status {
-    ($msg: literal, $output: ident, $self: ident) => {
-        let stderr = String::from_utf8_lossy(&$output.stderr);
-        anyhow::ensure!($output.status.success(), $msg, $self.path, stderr)
-    };
+pub type Result<T> = std::result::Result<T, Error>;
+
+#[derive(ThisError, Debug)]
+pub enum Error {
+    #[error("Git command failed: {0}")]
+    Command(#[source] IoError),
+    #[error("Cannot determine if \"{0}\" is submodule: {1}")]
+    SubmoduleParent(String, String),
+    #[error("Cannot update submodule \"{0}\": {1}")]
+    SubmoduleUpdate(String, String),
+    #[error("Cannot update project \"{0}\": {1}")]
+    Update(String, String),
 }
 
 pub struct Git<'a> {
@@ -34,18 +42,18 @@ impl<'a> Git<'a> {
             .arg("rev-parse")
             .arg("--show-superproject-working-tree")
             .current_dir(self.path)
-            .output()?;
+            .output()
+            .map_err(Error::Command)?;
 
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::ensure!(
-            output.status.success(),
-            "Cannot determine if \"{}\" is submodule:\n{}",
-            self.path,
-            stderr
-        );
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            return Err(Error::SubmoduleParent(self.path.to_string(), stderr));
+        }
 
-        let stdout = String::from_utf8(output.stdout)?;
-        Ok(stdout.trim_end().to_string())
+        let stdout = String::from_utf8_lossy(&output.stdout)
+            .trim_end()
+            .to_string();
+        Ok(stdout)
     }
 
     fn update_submodule_command(&self, workdir: &str) -> Result<()> {
@@ -54,15 +62,13 @@ impl<'a> Git<'a> {
             .arg("update")
             .arg("--init")
             .current_dir(workdir)
-            .output()?;
+            .output()
+            .map_err(Error::Command)?;
 
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::ensure!(
-            output.status.success(),
-            "Cannot update submodule \"{}\":\n{}",
-            self.path,
-            stderr
-        );
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            return Err(Error::SubmoduleUpdate(self.path.to_string(), stderr));
+        }
 
         Ok(())
     }
@@ -72,15 +78,13 @@ impl<'a> Git<'a> {
             .arg("pull")
             .arg("--rebase")
             .current_dir(self.path)
-            .output()?;
+            .output()
+            .map_err(Error::Command)?;
 
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::ensure!(
-            output.status.success(),
-            "Cannot update project \"{}\":\n{}",
-            self.path,
-            stderr
-        );
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            return Err(Error::Update(self.path.to_string(), stderr));
+        }
 
         Ok(())
     }

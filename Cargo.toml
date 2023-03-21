@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 serde_yaml = "0.9"
+thiserror = "1.0"
 
 anyhow = { version = "1.0", features = ["backtrace"] }
 chrono = { version = "0.4", features = ["clock", "std"], default-features = false }
