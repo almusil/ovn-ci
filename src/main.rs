@@ -1,14 +1,7 @@
 use std::env;
 
 use anyhow::Result;
-
-use crate::ci::ContinuousIntegration;
-use crate::config::Configuration;
-
-mod ci;
-mod config;
-mod git;
-mod runner;
+use lib::{Configuration, ContinuousIntegration};
 
 fn main() -> Result<()> {
     #[cfg(debug_assertions)]
