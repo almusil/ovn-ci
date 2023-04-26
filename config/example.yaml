@@ -1,5 +1,6 @@
 jobs: 40
 log_path: /tmp/ovn_ci
+host: localhost
 
 git:
   ovn_path: /tmp/ovn

@@ -22,6 +22,7 @@ pub enum Error {
 pub struct Configuration {
     jobs: usize,
     log_path: String,
+    host: String,
     #[serde(default)]
     image_name: Option<String>,
     concurrent_limit: Option<usize>,
@@ -42,6 +43,10 @@ impl Configuration {
 
     pub fn log_path(&self) -> &str {
         &self.log_path
+    }
+
+    pub fn host(&self) -> &str {
+        &self.host
     }
 
     pub fn image_name(&self) -> Option<&str> {
