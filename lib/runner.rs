@@ -25,15 +25,14 @@ pub enum Error {
 }
 
 macro_rules! _runner_error {
-    ($e:expr, $name:expr, $start:expr) => {
-        $e.map_err(|e| Runner::<Finished>::new($name, $start, Some(e)))
+    ($e:expr, $name:expr, $log_path: expr, $start:expr) => {
+        $e.map_err(|e| Runner::<Finished>::new($name, $log_path, $start, Some(e)))
     };
 }
 
 #[derive(Debug)]
 pub struct New {
     command: Command,
-    log_path: PathBuf,
 }
 
 #[derive(Debug)]
@@ -51,13 +50,8 @@ pub struct Finished {
 #[derive(Debug)]
 pub struct Runner<S> {
     name: String,
+    log_path: PathBuf,
     state: S,
-}
-
-impl<S> Runner<S> {
-    pub fn name(&self) -> String {
-        self.name.clone()
-    }
 }
 
 impl Runner<New> {
@@ -104,7 +98,8 @@ impl Runner<New> {
 
         Runner {
             name,
-            state: New { command, log_path },
+            log_path,
+            state: New { command },
         }
     }
 
@@ -112,15 +107,16 @@ impl Runner<New> {
         format!(
             "The job \"{}\" is starting, log file: {}/ovn-ci.log",
             self.name,
-            self.state.log_path.to_string_lossy()
+            self.log_path.to_string_lossy()
         )
     }
 
     pub fn run(self) -> Result<Runner<Running>, Runner<Finished>> {
         let start = Instant::now();
         let (log, log_clone) = _runner_error!(
-            self.create_log_file(&self.state.log_path),
-            self.name(),
+            self.create_log_file(&self.log_path),
+            self.name.clone(),
+            self.log_path.clone(),
             start
         )?;
 
@@ -129,11 +125,13 @@ impl Runner<New> {
         let proc = _runner_error!(
             command.spawn().map_err(Error::RunnerStart),
             self.name.clone(),
+            self.log_path.clone(),
             start
         )?;
 
         Ok(Runner {
             name: self.name,
+            log_path: self.log_path,
             state: Running { start, proc },
         })
     }
@@ -168,14 +166,15 @@ impl Runner<Running> {
             Err(e) => Some(Error::RunnerFinnish(e)),
         };
 
-        Runner::<Finished>::new(self.name, self.state.start, error)
+        Runner::<Finished>::new(self.name, self.log_path, self.state.start, error)
     }
 }
 
 impl Runner<Finished> {
-    fn new(name: String, start: Instant, error: Option<Error>) -> Self {
+    fn new(name: String, log_path: PathBuf, start: Instant, error: Option<Error>) -> Self {
         Runner {
             name,
+            log_path,
             state: Finished {
                 error,
                 duration: Instant::now().duration_since(start),
@@ -201,6 +200,33 @@ impl Runner<Finished> {
             None => report.push_str("Ok"),
         };
         report
+    }
+
+    pub fn report_html(&self, host: &str, log_prefix: &str) -> String {
+        let stripped_path = self
+            .log_path
+            .strip_prefix(log_prefix)
+            .unwrap_or(Path::new(""))
+            .to_string_lossy();
+        let status = if self.success() { "Ok" } else { "Fail" };
+        let artifacts = if self.success() {
+            "-".to_string()
+        } else {
+            format!(
+                r#"<a href="http://{}:8080/{}/logs.tgz" target="_blank">Artifacts</a>"#,
+                host, stripped_path
+            )
+        };
+        format!(
+            r#"<tr><td>{}</td><td class="{}">{}</td><td>{}</td><td><a href="http://{}:8080/{}/ovn-ci.log" target="_blank">Log</a></td><td>{}</td></tr>"#,
+            self.name,
+            status.to_lowercase(),
+            status,
+            self.format_duration(),
+            host,
+            stripped_path,
+            artifacts
+        )
     }
 
     fn format_duration(&self) -> String {

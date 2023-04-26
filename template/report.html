@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>@HEADER@</title>
+  <style>
+    table, th, td {
+      border: 1px solid black;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      text-align: center
+    }
+
+    tr:hover td {
+      background-color: LemonChiffon;
+    }
+
+    table {
+      width: 100%
+    }
+
+    .fail {
+      font-weight: bold;
+      background-color: LightCoral !important;
+    }
+
+    .ok {
+      font-weight: bold;
+      background-color: MediumSpringGreen !important;
+    }
+  </style>
+</head>
+<body>
+<h3>@HEADER@</h3>
+<table>
+  <tr>
+    <th>Name</th>
+    <th>Status</th>
+    <th>Duration</th>
+    <th>Log</th>
+    <th>Artifacts</th>
+  </tr>
+  @ROWS@
+</table>
+</body>
+</html>
