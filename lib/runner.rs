@@ -93,7 +93,11 @@ impl Runner<New> {
         command.current_dir(git.ovn_path());
 
         let mut log_path = PathBuf::from(log_path);
-        log_path.push(name.to_lowercase().replace(' ', "_"));
+        log_path.push(
+            name.to_lowercase()
+                .replace(['(', ')'], "")
+                .replace(' ', "_"),
+        );
         log_path.set_extension("log");
 
         Runner {
