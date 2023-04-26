@@ -1,0 +1,11 @@
+[Unit]
+Description=OVN CI service
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=exec
+ExecStart=ovn-ci /etc/ovn-ci/config.yaml
+
+[Install]
+WantedBy=multi-user.target

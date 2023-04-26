@@ -1,0 +1,11 @@
+[Unit]
+Description=OVN CI timer
+Wants=network-online.target
+After=network-online.target
+
+[Timer]
+OnCalendar=*-*-* 1:00:00
+Unit=ovn-ci.service
+
+[Install]
+WantedBy=multi-user.target
