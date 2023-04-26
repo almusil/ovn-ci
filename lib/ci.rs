@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
-use std::fs::{canonicalize, DirBuilder};
-use std::io::Error as IoError;
-use std::path::PathBuf;
+use std::fs::{canonicalize, DirBuilder, File};
+use std::io::{Error as IoError, Write};
+use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
 
@@ -26,6 +26,8 @@ pub enum Error {
     ScriptPath(#[source] IoError),
     #[error("At least one job failed")]
     Failure,
+    #[error("Cannot create HTML report: {0}")]
+    HtmlReport(#[source] IoError),
 }
 
 macro_rules! _push_finished_and_report {
@@ -98,6 +100,8 @@ impl ContinuousIntegration {
             thread::sleep(Duration::from_millis(100));
         }
 
+        self.save_html_report(&log_path)?;
+
         if self.should_fail() {
             return Err(Error::Failure);
         }
@@ -137,5 +141,40 @@ impl ContinuousIntegration {
                 }
             }
         }
+    }
+
+    fn save_html_report(&self, log_path: &Path) -> Result<PathBuf> {
+        let mut template = include_str!("../template/report.html").to_string();
+
+        let rows = self
+            .finished
+            .iter()
+            .map(|r| r.report_html(self.config.host(), self.config.log_path()))
+            .collect::<String>();
+
+        template = template.replace("@ROWS@", &rows);
+        template = template.replace("@HEADER@", &ContinuousIntegration::report_header());
+
+        let mut path = log_path.to_path_buf();
+        path.push("report.html");
+
+        File::create(&path)
+            .map_err(Error::HtmlReport)?
+            .write_all(template.as_bytes())
+            .map_err(Error::HtmlReport)?;
+
+        Ok(path)
+    }
+
+    fn report_header() -> String {
+        let arch = if cfg!(target_arch = "x86_64") {
+            "x86_64"
+        } else if cfg!(target_arch = "aarch64") {
+            "ARM64"
+        } else {
+            "Unknown"
+        };
+
+        format!("OVN CI - {} - {}", Local::now().format("%d %B %Y"), arch)
     }
 }
