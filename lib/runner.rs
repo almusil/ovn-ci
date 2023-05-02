@@ -1,4 +1,4 @@
-use std::fs::File;
+use std::fs::{DirBuilder, File};
 use std::io::Error as IoError;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
@@ -8,12 +8,12 @@ use thiserror::Error as ThisError;
 
 use crate::config::{Git, Suite};
 
-const SCRIPT: &str = "./.ci/ci.sh";
-
 #[derive(ThisError, Debug)]
 pub enum Error {
     #[error("Cannot create log file: {0}")]
     LogFile(#[source] IoError),
+    #[error("Cannot create log directory: {0}")]
+    LogDirectory(#[source] IoError),
     #[error("Cannot clone log file descriptor: {0}")]
     LogFileDescriptor(#[source] IoError),
     #[error("Cannot start runner: {0}")]
@@ -66,11 +66,12 @@ impl Runner<New> {
         image_name: Option<&str>,
         git: &Git,
         suite: &Suite,
+        script_path: &Path,
         log_path: &Path,
     ) -> Self {
         let name = suite.name();
 
-        let mut command = Command::new(SCRIPT);
+        let mut command = Command::new(script_path);
 
         let ovn_path = format!("--ovn-path={}", git.ovn_path());
         command.arg(&ovn_path);
@@ -90,7 +91,7 @@ impl Runner<New> {
             command.env(key, val);
         });
 
-        command.current_dir(git.ovn_path());
+        command.arg("--archive-logs");
 
         let mut log_path = PathBuf::from(log_path);
         log_path.push(
@@ -98,7 +99,8 @@ impl Runner<New> {
                 .replace(['(', ')'], "")
                 .replace(' ', "_"),
         );
-        log_path.set_extension("log");
+
+        command.current_dir(&log_path);
 
         Runner {
             name,
@@ -108,7 +110,7 @@ impl Runner<New> {
 
     pub fn report_console(&self) -> String {
         format!(
-            "The job \"{}\" is starting, log file: {}",
+            "The job \"{}\" is starting, log file: {}/ovn-ci.log",
             self.name,
             self.state.log_path.to_string_lossy()
         )
@@ -137,6 +139,13 @@ impl Runner<New> {
     }
 
     fn create_log_file(&self, path: &Path) -> Result<(File, File), Error> {
+        DirBuilder::new()
+            .create(path)
+            .map_err(Error::LogDirectory)?;
+
+        let mut path = path.to_path_buf();
+        path.push("ovn-ci.log");
+
         let file = File::create(path).map_err(Error::LogFile)?;
         let clone = file.try_clone().map_err(Error::LogFileDescriptor)?;
         Ok((file, clone))
