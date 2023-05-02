@@ -1,5 +1,5 @@
 use std::collections::VecDeque;
-use std::fs::DirBuilder;
+use std::fs::{canonicalize, DirBuilder};
 use std::io::Error as IoError;
 use std::path::PathBuf;
 use std::thread;
@@ -12,6 +12,8 @@ use crate::config::Configuration;
 use crate::git::{Error as GitError, Git};
 use crate::runner::{Finished, New, Runner, Running};
 
+const SCRIPT: &str = ".ci/ci.sh";
+
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(ThisError, Debug)]
@@ -20,6 +22,8 @@ pub enum Error {
     Git(#[from] GitError),
     #[error("Cannot create log directory structure: {0}")]
     LogDirectory(#[source] IoError),
+    #[error("Cannot canonicalize \"ci.sh\" script path: {0}")]
+    ScriptPath(#[source] IoError),
     #[error("At least one job failed")]
     Failure,
 }
@@ -51,6 +55,8 @@ impl ContinuousIntegration {
             Git::new(git_config.ovs_path()).update()?;
         }
 
+        let script_path = canonicalize(format!("{}/{}", git_config.ovn_path(), SCRIPT))
+            .map_err(Error::ScriptPath)?;
         let log_path = self.create_log_directory()?;
 
         let suites = self.config.suites();
@@ -64,6 +70,7 @@ impl ContinuousIntegration {
                     self.config.image_name(),
                     self.config.git(),
                     suite,
+                    &script_path,
                     &log_path,
                 )
             })
