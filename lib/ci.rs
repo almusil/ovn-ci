@@ -145,6 +145,7 @@ impl ContinuousIntegration {
 
     fn save_html_report(&self, log_path: &Path) -> Result<File> {
         let mut template = include_str!("../template/report.html").to_string();
+        let success = self.finished.iter().filter(|r| r.success()).count();
 
         let rows = self
             .finished
@@ -153,7 +154,10 @@ impl ContinuousIntegration {
             .collect::<String>();
 
         template = template.replace("@ROWS@", &rows);
-        template = template.replace("@HEADER@", &ContinuousIntegration::report_header());
+        template = template.replace(
+            "@HEADER@",
+            &ContinuousIntegration::report_header(success, self.finished.len()),
+        );
 
         let mut path = log_path.to_path_buf();
         path.push("report");
@@ -168,7 +172,7 @@ impl ContinuousIntegration {
         Ok(file)
     }
 
-    fn report_header() -> String {
+    fn report_header(success: usize, count: usize) -> String {
         let arch = if cfg!(target_arch = "x86_64") {
             "x86_64"
         } else if cfg!(target_arch = "aarch64") {
@@ -177,6 +181,12 @@ impl ContinuousIntegration {
             "Unknown"
         };
 
-        format!("OVN CI - {} - {}", Local::now().format("%d %B %Y"), arch)
+        format!(
+            "OVN CI - {} - {} - Success ({}) - Failure ({})",
+            Local::now().format("%d %B %Y"),
+            arch,
+            success,
+            (count - success)
+        )
     }
 }
