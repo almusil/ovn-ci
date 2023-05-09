@@ -7,6 +7,14 @@ git:
   ovs_path: /tmp/ovn/ovs
   update: true
 
+email:
+  smtp: smtp.example.com
+  to: email1@example.com
+  reply_to: reply@example.com
+  cc:
+    - email2@example.com
+    - email3@example.com
+
 suites:
   - name: Compile
     compiler: gcc

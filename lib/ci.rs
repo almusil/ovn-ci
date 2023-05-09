@@ -9,6 +9,7 @@ use chrono::Local;
 use thiserror::Error as ThisError;
 
 use crate::config::Configuration;
+use crate::email::{Error as EmailError, Report as EmailReport};
 use crate::git::{Error as GitError, Git};
 use crate::runner::{Finished, New, Runner, Running};
 
@@ -28,6 +29,8 @@ pub enum Error {
     Failure,
     #[error("Cannot create HTML report: {0}")]
     HtmlReport(#[source] IoError),
+    #[error("Cannot send email report: {0}")]
+    EmailReport(#[from] EmailError),
 }
 
 macro_rules! _push_finished_and_report {
@@ -100,9 +103,15 @@ impl ContinuousIntegration {
             thread::sleep(Duration::from_millis(100));
         }
 
-        self.save_html_report(&log_path)?;
+        let header = self.report_header();
+
+        let report_path = self.save_html_report(&log_path, &header)?;
 
         if self.should_fail() {
+            if let Some(email) = self.config.email() {
+                EmailReport::new(email, &report_path, &header, self.config.host())?.send()?;
+            }
+
             return Err(Error::Failure);
         }
 
@@ -143,9 +152,8 @@ impl ContinuousIntegration {
         }
     }
 
-    fn save_html_report(&self, log_path: &Path) -> Result<PathBuf> {
+    fn save_html_report(&self, log_path: &Path, header: &str) -> Result<PathBuf> {
         let mut template = include_str!("../template/report.html").to_string();
-        let success = self.finished.iter().filter(|r| r.success()).count();
 
         let rows = self
             .finished
@@ -154,10 +162,7 @@ impl ContinuousIntegration {
             .collect::<String>();
 
         template = template.replace("@ROWS@", &rows);
-        template = template.replace(
-            "@HEADER@",
-            &ContinuousIntegration::report_header(success, self.finished.len()),
-        );
+        template = template.replace("@HEADER@", header);
 
         let mut path = log_path.to_path_buf();
         path.push("report.html");
@@ -170,7 +175,8 @@ impl ContinuousIntegration {
         Ok(path)
     }
 
-    fn report_header(success: usize, count: usize) -> String {
+    fn report_header(&self) -> String {
+        let success = self.finished.iter().filter(|r| r.success()).count();
         let arch = if cfg!(target_arch = "x86_64") {
             "x86_64"
         } else if cfg!(target_arch = "aarch64") {
@@ -184,7 +190,7 @@ impl ContinuousIntegration {
             Local::now().format("%d %B %Y"),
             arch,
             success,
-            (count - success)
+            (self.finished.len() - success)
         )
     }
 }
