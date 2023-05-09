@@ -27,6 +27,8 @@ pub struct Configuration {
     image_name: Option<String>,
     concurrent_limit: Option<usize>,
     git: Git,
+    #[serde(default)]
+    email: Option<Email>,
     suites: Vec<Suite>,
 }
 
@@ -61,6 +63,10 @@ impl Configuration {
         &self.git
     }
 
+    pub fn email(&self) -> Option<&Email> {
+        self.email.as_ref()
+    }
+
     pub fn suites(&self) -> &[Suite] {
         &self.suites
     }
@@ -87,6 +93,35 @@ impl Git {
 
     pub fn ovs_path(&self) -> &str {
         &self.ovs_path
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[serde(deny_unknown_fields)]
+pub struct Email {
+    smtp: String,
+    to: String,
+    reply_to: String,
+    #[serde(default)]
+    cc: Option<Vec<String>>,
+}
+
+impl Email {
+    pub fn smtp(&self) -> &str {
+        &self.smtp
+    }
+
+    pub fn to(&self) -> &str {
+        &self.to
+    }
+
+    pub fn reply_to(&self) -> &str {
+        &self.reply_to
+    }
+
+    pub fn cc(&self) -> Option<&Vec<String>> {
+        self.cc.as_ref()
     }
 }
 

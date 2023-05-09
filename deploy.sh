@@ -12,7 +12,7 @@ USE_SUBMODULE=${USE_SUBMODULE:-"yes"}
 function install_dependencies() {
     echo "Installing dependencies..."
 
-    dnf -y install podman git nginx
+    dnf -y install podman git nginx mailx
 }
 
 function setup_workspace() {
