@@ -3,9 +3,9 @@ use std::fs::{canonicalize, DirBuilder, File};
 use std::io::{Error as IoError, Write};
 use std::path::{Path, PathBuf};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
-use chrono::Local;
+use chrono::DateTime;
 use thiserror::Error as ThisError;
 
 use crate::config::Configuration;
@@ -126,7 +126,10 @@ impl ContinuousIntegration {
     }
 
     fn create_log_directory(&self) -> Result<PathBuf> {
-        let timestamp = format!("{}", Local::now().format("%Y%m%d-%H%M%S"));
+        let timestamp = format!(
+            "{}",
+            DateTime::from(SystemTime::now()).format("%Y%m%d-%H%M%S")
+        );
         let mut path = PathBuf::from(self.config.log_path());
         path.push(timestamp);
 
@@ -194,7 +197,7 @@ impl ContinuousIntegration {
 
         format!(
             "OVN CI - {} - {} - Success ({}) - Failure ({})",
-            Local::now().format("%d %B %Y"),
+            DateTime::from(SystemTime::now()).format("%d %B %Y"),
             arch,
             success,
             (self.finished.len() - success)
