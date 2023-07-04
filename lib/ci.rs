@@ -9,6 +9,7 @@ use chrono::Local;
 use thiserror::Error as ThisError;
 
 use crate::config::Configuration;
+use crate::container::{Container, Error as ContainerError};
 use crate::email::{Error as EmailError, Report as EmailReport};
 use crate::git::{Error as GitError, Git};
 use crate::runner::{Finished, New, Runner, Running};
@@ -21,6 +22,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
     #[error("{0}")]
     Git(#[from] GitError),
+    #[error("{0}")]
+    Container(#[from] ContainerError),
     #[error("Cannot create log directory structure: {0}")]
     LogDirectory(#[source] IoError),
     #[error("Cannot canonicalize \"ci.sh\" script path: {0}")]
@@ -58,6 +61,10 @@ impl ContinuousIntegration {
         if git_config.should_update() {
             Git::new(git_config.ovn_path()).update()?;
             Git::new(git_config.ovs_path()).update()?;
+        }
+
+        if let Some(image_name) = self.config.image_name() {
+            Container::new(image_name).pull()?;
         }
 
         let script_path = canonicalize(format!("{}/{}", git_config.ovn_path(), SCRIPT))
