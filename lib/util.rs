@@ -23,3 +23,30 @@ impl OutputExt for Output {
         }
     }
 }
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum Arch {
+    Arm64,
+    X86_64,
+    Unknown,
+}
+
+impl Arch {
+    pub fn get() -> Self {
+        if cfg!(target_arch = "x86_64") {
+            Arch::X86_64
+        } else if cfg!(target_arch = "aarch64") {
+            Arch::Arm64
+        } else {
+            Arch::Unknown
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        match self {
+            Arch::Arm64 => "ARM64",
+            Arch::X86_64 => "x86_64",
+            Arch::Unknown => "Unknown",
+        }
+    }
+}

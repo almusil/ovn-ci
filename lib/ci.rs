@@ -13,6 +13,7 @@ use crate::container::{Container, Error as ContainerError};
 use crate::email::{Error as EmailError, Report as EmailReport};
 use crate::git::{Error as GitError, Git};
 use crate::runner::{Finished, New, Runner, Running};
+use crate::util::Arch;
 
 const SCRIPT: &str = ".ci/ci.sh";
 
@@ -187,18 +188,11 @@ impl ContinuousIntegration {
 
     fn report_header(&self) -> String {
         let success = self.finished.iter().filter(|r| r.success()).count();
-        let arch = if cfg!(target_arch = "x86_64") {
-            "x86_64"
-        } else if cfg!(target_arch = "aarch64") {
-            "ARM64"
-        } else {
-            "Unknown"
-        };
 
         format!(
             "OVN CI - {} - {} - Success ({}) - Failure ({})",
             DateTime::from(SystemTime::now()).format("%d %B %Y"),
-            arch,
+            Arch::get().name(),
             success,
             (self.finished.len() - success)
         )
