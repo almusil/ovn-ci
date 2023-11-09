@@ -193,6 +193,10 @@ pub struct Suite {
     test_range: Option<String>,
     #[serde(default)]
     libs: Option<String>,
+    #[serde(default)]
+    unstable: bool,
+    #[serde(default)]
+    recheck: bool,
 }
 
 impl Suite {
@@ -219,6 +223,14 @@ impl Suite {
 
         if let Some(libs) = &self.libs {
             envs.push(("LIBS", libs.as_str()));
+        }
+
+        if self.unstable {
+            envs.push(("UNSTABLE", "unstable"));
+        }
+
+        if self.recheck {
+            envs.push(("RECHECK", "yes"));
         }
 
         envs
@@ -252,6 +264,14 @@ impl Suite {
             name.push_str(" (");
             name.push_str(libs);
             name.push(')');
+        }
+
+        if self.unstable {
+            name.push_str(" - unstable");
+        }
+
+        if self.recheck {
+            name.push_str(" - recheck");
         }
 
         name
