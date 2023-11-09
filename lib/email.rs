@@ -6,13 +6,14 @@ use std::process::{Command, Stdio};
 use thiserror::Error as ThisError;
 
 use crate::config::Email;
+use crate::util::OutputExt;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(ThisError, Debug)]
 pub enum Error {
     #[error("Cannot execute \"mailx\": {0}")]
-    Command(#[source] IoError),
+    Command(#[from] IoError),
     #[error("\"mailx\" failed: {0}")]
     Mailx(String),
     #[error("Cannot open report file: {0}")]
@@ -27,17 +28,15 @@ impl Report {
     pub fn new(config: &Email, report_path: &Path, header: &str, host: &str) -> Result<Report> {
         let mut command = Command::new("mailx");
 
-        let subject = format!("{}\r\nContent-Type: text/html", header);
-        command.arg("-s").arg(&subject);
-
-        let smtp = format!("smtp={}", config.smtp());
-        command.arg("-S").arg(&smtp);
-
-        let reply_to = format!("replyto={}", config.reply_to());
-        command.arg("-S").arg(&reply_to);
-
-        let from = format!("OVN CI Automation <root@{}>", host);
-        command.arg("-r").arg(&from);
+        command
+            .arg("-s")
+            .arg(format!("{}\r\nContent-Type: text/html", header))
+            .arg("-S")
+            .arg(format!("smtp={}", config.smtp()))
+            .arg("-S")
+            .arg(format!("replyto={}", config.reply_to()))
+            .arg("-r")
+            .arg(format!("OVN CI Automation <root@{}>", host));
 
         let file = File::open(report_path).map_err(Error::ReportFile)?;
         command.stdin(Stdio::from(file));
@@ -53,13 +52,6 @@ impl Report {
     }
 
     pub fn send(&mut self) -> Result<()> {
-        let output = self.command.output().map_err(Error::Command)?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-            return Err(Error::Mailx(stderr));
-        }
-
-        Ok(())
+        self.command.output()?.status_ok().map_err(Error::Mailx)
     }
 }
