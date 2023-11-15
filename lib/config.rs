@@ -29,6 +29,7 @@ pub struct Configuration {
     git: Git,
     #[serde(default)]
     email: Option<Email>,
+    vm: Vm,
     suites: Vec<Suite>,
 }
 
@@ -65,6 +66,10 @@ impl Configuration {
 
     pub fn email(&self) -> Option<&Email> {
         self.email.as_ref()
+    }
+
+    pub fn vm(&self) -> &Vm {
+        &self.vm
     }
 
     pub fn suites(&self) -> &[Suite] {
@@ -122,6 +127,24 @@ impl Email {
 
     pub fn cc(&self) -> Option<&Vec<String>> {
         self.cc.as_ref()
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[serde(deny_unknown_fields)]
+pub struct Vm {
+    memory: u32,
+    release: String,
+}
+
+impl Vm {
+    pub fn memory(&self) -> u32 {
+        self.memory
+    }
+
+    pub fn release(&self) -> &str {
+        &self.release
     }
 }
 
