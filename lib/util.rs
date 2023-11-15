@@ -49,4 +49,12 @@ impl Arch {
             Arch::Unknown => "Unknown",
         }
     }
+
+    pub fn target(&self) -> &str {
+        match self {
+            Arch::Arm64 => "aarch64",
+            Arch::X86_64 => "x86_64",
+            Arch::Unknown => "unknown",
+        }
+    }
 }
