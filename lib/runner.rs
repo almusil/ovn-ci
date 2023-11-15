@@ -6,7 +6,8 @@ use std::time::{Duration, Instant};
 
 use thiserror::Error as ThisError;
 
-use crate::config::{Git, Suite};
+use crate::config::Suite;
+use crate::vm::{RunnerVm, RunnerVmError};
 
 #[derive(ThisError, Debug)]
 pub enum Error {
@@ -14,10 +15,8 @@ pub enum Error {
     LogFile(#[source] IoError),
     #[error("Cannot create log directory: {0}")]
     LogDirectory(#[source] IoError),
-    #[error("Cannot clone log file descriptor: {0}")]
-    LogFileDescriptor(#[source] IoError),
-    #[error("Cannot start runner: {0}")]
-    RunnerStart(#[source] IoError),
+    #[error("VM error: {0}")]
+    Vm(#[source] RunnerVmError),
     #[error("Cannot finnish runner job: {0}")]
     RunnerFinnish(#[source] IoError),
     #[error("Non-zero return code: {0}")]
@@ -25,20 +24,24 @@ pub enum Error {
 }
 
 macro_rules! _runner_error {
-    ($e:expr, $name:expr, $log_path: expr, $start:expr) => {
-        $e.map_err(|e| Runner::<Finished>::new($name, $log_path, $start, Some(e)))
+    ($e:expr, $self:expr, $start:expr) => {
+        $e.map_err(|e| {
+            Runner::<Finished>::new($self.name.clone(), $self.log_path.clone(), $start, Some(e))
+        })
     };
 }
 
 #[derive(Debug)]
 pub struct New {
     command: Command,
+    vm: RunnerVm,
 }
 
 #[derive(Debug)]
 pub struct Running {
     start: Instant,
     proc: Child,
+    vm: RunnerVm,
 }
 
 #[derive(Debug)]
@@ -55,37 +58,8 @@ pub struct Runner<S> {
 }
 
 impl Runner<New> {
-    pub fn new(
-        jobs: usize,
-        image_name: Option<&str>,
-        git: &Git,
-        suite: &Suite,
-        script_path: &Path,
-        log_path: &Path,
-    ) -> Self {
+    pub fn new(index: usize, memory: u32, jobs: usize, suite: &Suite, log_path: &Path) -> Self {
         let name = suite.name();
-
-        let mut command = Command::new(script_path);
-
-        let ovn_path = format!("--ovn-path={}", git.ovn_path());
-        command.arg(&ovn_path);
-
-        let ovs_path = format!("--ovs-path={}", git.ovs_path());
-        command.arg(&ovs_path);
-
-        let jobs = format!("--jobs={}", jobs);
-        command.arg(&jobs);
-
-        if let Some(name) = image_name {
-            let image_name = format!("--image-name={}", name);
-            command.arg(&image_name);
-        }
-
-        suite.envs().into_iter().for_each(|(key, val)| {
-            command.env(key, val);
-        });
-
-        command.arg("--archive-logs");
 
         let mut log_path = PathBuf::from(log_path);
         log_path.push(
@@ -94,12 +68,20 @@ impl Runner<New> {
                 .replace(' ', "_"),
         );
 
-        command.current_dir(&log_path);
+        let mut command = Command::new("/workspace/ovn/.ci/ci.sh");
+        command
+            .arg("--ovn-path=/workspace/ovn")
+            .arg("--ovs-path=/workspace/ovs")
+            .arg(format!("--jobs={jobs}"))
+            .arg("--archive-logs")
+            .envs(suite.envs());
+
+        let vm = RunnerVm::new(index, memory, jobs, log_path.to_string_lossy());
 
         Runner {
             name,
             log_path,
-            state: New { command },
+            state: New { command, vm },
         }
     }
 
@@ -111,32 +93,33 @@ impl Runner<New> {
         )
     }
 
-    pub fn run(self) -> Result<Runner<Running>, Runner<Finished>> {
+    pub fn run(mut self) -> Result<Runner<Running>, Runner<Finished>> {
         let start = Instant::now();
-        let (log, log_clone) = _runner_error!(
-            self.create_log_file(&self.log_path),
-            self.name.clone(),
-            self.log_path.clone(),
-            start
-        )?;
+        let log = _runner_error!(self.create_log_file(&self.log_path), self, start)?;
 
-        let mut command = self.state.command;
-        command.stdout(log).stderr(log_clone);
+        _runner_error!(self.state.vm.start().map_err(Error::Vm), self, start)?;
+
         let proc = _runner_error!(
-            command.spawn().map_err(Error::RunnerStart),
-            self.name.clone(),
-            self.log_path.clone(),
+            self.state
+                .vm
+                .command_spawn(&mut self.state.command, log)
+                .map_err(Error::Vm),
+            self,
             start
         )?;
 
         Ok(Runner {
             name: self.name,
             log_path: self.log_path,
-            state: Running { start, proc },
+            state: Running {
+                start,
+                proc,
+                vm: self.state.vm,
+            },
         })
     }
 
-    fn create_log_file(&self, path: &Path) -> Result<(File, File), Error> {
+    fn create_log_file(&self, path: &Path) -> Result<File, Error> {
         DirBuilder::new()
             .create(path)
             .map_err(Error::LogDirectory)?;
@@ -144,9 +127,7 @@ impl Runner<New> {
         let mut path = path.to_path_buf();
         path.push("ovn-ci.log");
 
-        let file = File::create(path).map_err(Error::LogFile)?;
-        let clone = file.try_clone().map_err(Error::LogFileDescriptor)?;
-        Ok((file, clone))
+        File::create(path).map_err(Error::LogFile)
     }
 }
 
@@ -158,9 +139,17 @@ impl Runner<Running> {
         }
     }
 
-    pub fn finish(self) -> Runner<Finished> {
-        let mut proc = self.state.proc;
-        let error = match proc.wait() {
+    pub fn finish(mut self) -> Runner<Finished> {
+        if let Err(e) = self.state.vm.retreive_artifacts() {
+            return Runner::<Finished>::new(
+                self.name,
+                self.log_path,
+                self.state.start,
+                Some(Error::Vm(e)),
+            );
+        }
+
+        let error = match self.state.proc.wait() {
             Ok(status) if status.success() => None,
             Ok(status) => Some(Error::ReturnCode(status.code().unwrap_or(-1))),
             Err(e) => Some(Error::RunnerFinnish(e)),
