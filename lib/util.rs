@@ -57,4 +57,12 @@ impl Arch {
             Arch::Unknown => "unknown",
         }
     }
+
+    pub fn machine(&self) -> &str {
+        match self {
+            Arch::Arm64 => "virt",
+            Arch::X86_64 => "q35",
+            Arch::Unknown => "unknown",
+        }
+    }
 }

@@ -1,0 +1,50 @@
+<domain type='kvm'>
+    <name>@VM_NAME@</name>
+    <memory unit='MiB'>@MEMSIZE@</memory>
+    <vcpu placement='static'>@VCPU_NUM@</vcpu>
+    <iothreads>1</iothreads>
+    <os>
+        <type arch='@ARCH@' machine='@MACHINE@'>hvm</type>
+        <bootmenu enable='no'/>
+        @EXTRA_ARGS@
+    </os>
+    <cpu mode='host-passthrough' check='none'/>
+    <clock offset='utc'>
+        <timer name='kvmclock'/>
+    </clock>
+    <devices>
+        <disk type='file' device='disk'>
+            <driver name='qemu' type='qcow2' cache='none' io='native' discard='unmap' iothread='1'/>
+            <source file='@ROOTDISK@'/>
+            <target dev='vda' bus='virtio'/>
+            <boot order='1'/>
+            <serial>ovn-ci-root-disk</serial>
+        </disk>
+        <controller type='usb' model='none'/>
+        <interface type="network">
+            <mac address="52:00:00:00:00:@MAC_SUFFIX@"/>
+            <source network="ovn-ci-isolated"/>
+            <model type="virtio"/>
+            <driver name="vhost" queues="2"/>
+        </interface>
+        <channel type='unix'>
+            <source mode='bind'/>
+            <target type='virtio' name='org.qemu.guest_agent.0'/>
+        </channel>
+        <video>
+            <model type='none'/>
+        </video>
+        <memballoon model='none'/>
+        <rng model='virtio'>
+            <backend model='random'>/dev/urandom</backend>
+        </rng>
+        <serial type='pty'>
+            <log file='@LOG_PATH@'/>
+            <target port='0'/>
+        </serial>
+        <console type='pty'>
+            <log file='@LOG_PATH@'/>
+            <target type='serial' port='0'/>
+        </console>
+    </devices>
+</domain>
