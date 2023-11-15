@@ -1,21 +1,21 @@
 use std::collections::VecDeque;
-use std::fs::{canonicalize, DirBuilder, File};
+use std::fs::{DirBuilder, File};
 use std::io::{Error as IoError, Write};
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, SystemTime};
 
-use chrono::DateTime;
+use chrono::{DateTime, Datelike};
 use thiserror::Error as ThisError;
 
 use crate::config::Configuration;
-use crate::container::{Container, Error as ContainerError};
 use crate::email::{Error as EmailError, Report as EmailReport};
 use crate::git::{Error as GitError, Git};
 use crate::runner::{Finished, New, Runner, Running};
 use crate::util::Arch;
+use crate::vm::{BaseVm, BaseVmError};
 
-const SCRIPT: &str = ".ci/ci.sh";
+const BUILD_AT_DAY: u32 = 1;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -23,12 +23,10 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
     #[error("{0}")]
     Git(#[from] GitError),
-    #[error("{0}")]
-    Container(#[from] ContainerError),
+    #[error("Base VM error: {0}")]
+    BaseVm(#[from] BaseVmError),
     #[error("Cannot create log directory structure: {0}")]
     LogDirectory(#[source] IoError),
-    #[error("Cannot canonicalize \"ci.sh\" script path: {0}")]
-    ScriptPath(#[source] IoError),
     #[error("At least one job failed")]
     Failure,
     #[error("Cannot create HTML report: {0}")]
@@ -47,48 +45,38 @@ macro_rules! _push_finished_and_report {
 pub struct ContinuousIntegration {
     config: Configuration,
     log_path: PathBuf,
+    build_image: bool,
     finished: Vec<Runner<Finished>>,
 }
 
 impl ContinuousIntegration {
-    pub fn new(config: Configuration) -> Self {
+    pub fn new(config: Configuration, build_image: bool) -> Self {
         let log_path = create_log_path(config.log_path());
 
         ContinuousIntegration {
             config,
             log_path,
+            build_image,
             finished: Vec::new(),
         }
     }
 
     pub fn run(&mut self) -> Result<()> {
         self.create_log_directory()?;
-
-        let git_config = self.config.git();
-        if git_config.should_update() {
-            Git::new(git_config.ovn_path()).update()?;
-            Git::new(git_config.ovs_path()).update()?;
-        }
-
-        if let Some(image_name) = self.config.image_name() {
-            Container::new(image_name).pull()?;
-        }
-
-        let script_path = canonicalize(format!("{}/{}", git_config.ovn_path(), SCRIPT))
-            .map_err(Error::ScriptPath)?;
+        self.update()?;
 
         let suites = self.config.suites();
         let concurrent_limit = self.config.concurrent_limit().unwrap_or(suites.len());
 
         let mut runners = suites
             .iter()
-            .map(|suite| {
+            .enumerate()
+            .map(|(index, suite)| {
                 Runner::new(
+                    index,
+                    self.config.vm().memory(),
                     self.config.jobs(),
-                    self.config.image_name(),
-                    self.config.git(),
                     suite,
-                    &script_path,
                     &self.log_path,
                 )
             })
@@ -136,6 +124,26 @@ impl ContinuousIntegration {
             .recursive(true)
             .create(&self.log_path)
             .map_err(Error::LogDirectory)
+    }
+    fn update(&mut self) -> Result<()> {
+        let git_config = self.config.git();
+        if git_config.should_update() {
+            Git::new(git_config.ovn_path()).update()?;
+            Git::new(git_config.ovs_path()).update()?;
+        }
+
+        let date = DateTime::from(SystemTime::now());
+        let mut vm = BaseVm::new(&self.config, &self.log_path);
+
+        if self.build_image || date.day() == BUILD_AT_DAY {
+            println!("Creating new base image.");
+            vm.rebuild()?;
+        }
+
+        println!("Updating base image.");
+        vm.update()?;
+
+        Ok(())
     }
 
     fn should_fail(&self) -> bool {
