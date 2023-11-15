@@ -1,0 +1,11 @@
+module virtlogd 1.0;
+
+require {
+	type httpd_sys_content_t;
+	type virtlogd_t;
+	class dir { add_name remove_name write };
+	class file { append create getattr open unlink };
+}
+
+allow virtlogd_t httpd_sys_content_t:dir { add_name remove_name write };
+allow virtlogd_t httpd_sys_content_t:file { append create getattr open unlink };

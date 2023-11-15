@@ -12,7 +12,8 @@ USE_SUBMODULE=${USE_SUBMODULE:-"yes"}
 function install_dependencies() {
     echo "Installing dependencies..."
 
-    dnf -y install podman git nginx mailx
+    dnf -y install podman git nginx mailx @virtualization seavgabios-bin \
+                   guestfs-tools
 }
 
 function setup_workspace() {
@@ -42,9 +43,6 @@ function setup_nginx() {
     echo "Setting up nginx..."
 
     sed -e "s|@HOSTNAME@|$HOSTNAME|" -e "s|@LOG_PATH@|$LOG_PATH|" static/nginx.conf > /etc/nginx/nginx.conf
-    mkdir -p $LOG_PATH
-    semanage fcontext -a -t httpd_sys_content_t "$LOG_PATH(/.*)?" || true
-    restorecon -R $LOG_PATH
 }
 
 function compile_ovn_ci() {
@@ -67,19 +65,49 @@ function install_services() {
     install -m 644 -D -t /usr/lib/systemd/system static/systemd/*
 }
 
+function create_directories() {
+    echo "Creating directories..."
+
+    mkdir -p $LOG_PATH
+    mkdir -p /etc/ovn-ci
+    mkdir -p /var/lib/ovn-ci
+}
+
+
+function setup_selinux() {
+    checkmodule -M -m -o /tmp/virtlogd.mod static/selinux/virtlogd.te
+    semodule_package -o /tmp/virtlogd.pp -m /tmp/virtlogd.mod
+    semodule -i /tmp/virtlogd.pp
+
+    semanage fcontext -a -t httpd_sys_content_t "$LOG_PATH(/.*)?" || true
+    restorecon -R $LOG_PATH
+
+    rm -f /tmp/virtlogd.mod /tmp/virtlogd.pp
+}
+
+function create_ssh_key() {
+    if [ ! -s /etc/ovn-ci/id_ed25519 ]; then
+      ssh-keygen -t ed25519 -f /etc/ovn-ci/id_ed25519 -N ""
+    fi
+}
+
 function start_services() {
     echo "Starting services..."
 
-    for service in nginx.service ovn-ci.timer; do
+    for service in nginx.service ovn-ci.timer libvirtd.service; do
         systemctl enable $service
         systemctl start $service
     done
 }
 
-function create_etc() {
-    echo "Creating /etc/ovn-ci config dir..."
+function define_vm_network() {
+    echo "Creating isolated libvirt network..."
 
-    mkdir -p /etc/ovn-ci
+    virsh net-destroy ovn-ci-isolated || true
+    virsh net-undefine ovn-ci-isolated || true
+    virsh net-define vm/network.xml
+    virsh net-start ovn-ci-isolated
+    virsh net-autostart ovn-ci-isolated
 }
 
 install_dependencies
@@ -93,4 +121,8 @@ fi
 setup_nginx
 compile_ovn_ci
 install_services
+create_directories
+setup_selinux
+create_ssh_key
 start_services
+define_vm_network
