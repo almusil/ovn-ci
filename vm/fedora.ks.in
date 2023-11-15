@@ -1,0 +1,68 @@
+text --non-interactive
+lang en_US.UTF-8
+keyboard us
+timezone --utc UTC
+selinux --enforcing
+firewall --enabled --service=ssh
+services --enabled=sshd,NetworkManager,chronyd
+network --bootproto=dhcp --device=link --activate
+rootpw --plaintext 123456
+shutdown
+
+bootloader --timeout=1 --append="console=ttyS0,115200 console=ttyAMA0 console=tty0"
+zerombr
+clearpart --all --initlabel --disklabel=msdos
+autopart --type=plain --noswap
+
+repo --name=fedora --mirrorlist=https://mirrors.fedoraproject.org/mirrorlist?repo=fedora-@RELEASE@&arch=@ARCH@
+repo --name=updates --mirrorlist=https://mirrors.fedoraproject.org/mirrorlist?repo=updates-released-f@RELEASE@&arch=@ARCH@
+
+%packages
+@core
+@hardware-support
+
+chrony
+dracut-config-generic
+glibc-langpack-en
+iw
+kernel
+microdnf
+podman
+
+-dracut-config-rescue
+-generic-release*
+-generic-release*
+-glibc-all-langpacks
+-initial-setup
+-initial-setup-gui
+-iproute-tc
+-ipw*
+-iwl*
+-@standard
+-trousers
+-usb_modeswitch
+%end
+
+%post
+releasever=$(rpm --eval '%{fedora}')
+rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-$releasever-primary
+
+# remove random seed, the newly installed instance should make it's own
+rm -f /var/lib/systemd/random-seed
+
+# The enp1s0 interface is a left over from the imagefactory install, clean this up
+rm -f /etc/NetworkManager/system-connections/*.nmconnection
+
+dnf -y remove dracut-config-generic
+
+# Remove machine-id on pre generated images
+rm -f /etc/machine-id
+touch /etc/machine-id
+
+# Note that running rpm recreates the rpm db files which aren't needed or wanted
+rm -f /var/lib/rpm/__db*
+
+# setup systemd to boot to the right runlevel
+rm -f /etc/systemd/system/default.target
+ln -s /lib/systemd/system/multi-user.target /etc/systemd/system/default.target
+%end
