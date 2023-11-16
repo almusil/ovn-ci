@@ -46,18 +46,24 @@ macro_rules! _push_finished_and_report {
 
 pub struct ContinuousIntegration {
     config: Configuration,
+    log_path: PathBuf,
     finished: Vec<Runner<Finished>>,
 }
 
 impl ContinuousIntegration {
     pub fn new(config: Configuration) -> Self {
+        let log_path = create_log_path(config.log_path());
+
         ContinuousIntegration {
             config,
+            log_path,
             finished: Vec::new(),
         }
     }
 
     pub fn run(&mut self) -> Result<()> {
+        self.create_log_directory()?;
+
         let git_config = self.config.git();
         if git_config.should_update() {
             Git::new(git_config.ovn_path()).update()?;
@@ -70,7 +76,6 @@ impl ContinuousIntegration {
 
         let script_path = canonicalize(format!("{}/{}", git_config.ovn_path(), SCRIPT))
             .map_err(Error::ScriptPath)?;
-        let log_path = self.create_log_directory()?;
 
         let suites = self.config.suites();
         let concurrent_limit = self.config.concurrent_limit().unwrap_or(suites.len());
@@ -84,7 +89,7 @@ impl ContinuousIntegration {
                     self.config.git(),
                     suite,
                     &script_path,
-                    &log_path,
+                    &self.log_path,
                 )
             })
             .collect::<Vec<_>>();
@@ -113,7 +118,7 @@ impl ContinuousIntegration {
 
         let header = self.report_header();
 
-        let report_path = self.save_html_report(&log_path, &header)?;
+        let report_path = self.save_html_report(&self.log_path, &header)?;
 
         if self.should_fail() {
             if let Some(email) = self.config.email() {
@@ -126,20 +131,11 @@ impl ContinuousIntegration {
         Ok(())
     }
 
-    fn create_log_directory(&self) -> Result<PathBuf> {
-        let timestamp = format!(
-            "{}",
-            DateTime::from(SystemTime::now()).format("%Y%m%d-%H%M%S")
-        );
-        let mut path = PathBuf::from(self.config.log_path());
-        path.push(timestamp);
-
+    fn create_log_directory(&self) -> Result<()> {
         DirBuilder::new()
             .recursive(true)
-            .create(&path)
-            .map_err(Error::LogDirectory)?;
-
-        Ok(path)
+            .create(&self.log_path)
+            .map_err(Error::LogDirectory)
     }
 
     fn should_fail(&self) -> bool {
@@ -197,4 +193,15 @@ impl ContinuousIntegration {
             (self.finished.len() - success)
         )
     }
+}
+
+fn create_log_path(path: &str) -> PathBuf {
+    let timestamp = format!(
+        "{}",
+        DateTime::from(SystemTime::now()).format("%Y%m%d-%H%M%S")
+    );
+    let mut log_path = PathBuf::from(path);
+    log_path.push(timestamp);
+
+    log_path
 }
