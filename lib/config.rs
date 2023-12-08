@@ -299,4 +299,8 @@ impl Suite {
 
         name
     }
+
+    pub fn is_cpu_intensive(&self) -> bool {
+        matches!(self.suite_type, None | Some(SuiteType::Unit))
+    }
 }

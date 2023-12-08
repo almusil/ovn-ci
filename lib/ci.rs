@@ -1,9 +1,7 @@
-use std::collections::VecDeque;
 use std::fs::{DirBuilder, File};
 use std::io::{Error as IoError, Write};
 use std::path::{Path, PathBuf};
-use std::thread;
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 use chrono::{DateTime, Datelike};
 use thiserror::Error as ThisError;
@@ -11,7 +9,7 @@ use thiserror::Error as ThisError;
 use crate::config::Configuration;
 use crate::email::{Error as EmailError, Report as EmailReport};
 use crate::git::{Error as GitError, Git};
-use crate::runner::{Finished, New, Runner, Running};
+use crate::scheduler::Scheduler;
 use crate::util::Arch;
 use crate::vm::{BaseVm, BaseVmError};
 
@@ -46,18 +44,19 @@ pub struct ContinuousIntegration {
     config: Configuration,
     log_path: PathBuf,
     build_image: bool,
-    finished: Vec<Runner<Finished>>,
+    scheduler: Scheduler,
 }
 
 impl ContinuousIntegration {
     pub fn new(config: Configuration, build_image: bool) -> Self {
         let log_path = create_log_path(config.log_path());
+        let scheduler = Scheduler::new(&config, &log_path);
 
         ContinuousIntegration {
             config,
             log_path,
             build_image,
-            finished: Vec::new(),
+            scheduler,
         }
     }
 
@@ -65,47 +64,9 @@ impl ContinuousIntegration {
         self.create_log_directory()?;
         self.update()?;
 
-        let suites = self.config.suites();
-        let concurrent_limit = self.config.concurrent_limit().unwrap_or(suites.len());
-
-        let mut runners = suites
-            .iter()
-            .enumerate()
-            .map(|(index, suite)| {
-                Runner::new(
-                    index,
-                    self.config.vm().memory(),
-                    self.config.jobs(),
-                    suite,
-                    &self.log_path,
-                )
-            })
-            .collect::<Vec<_>>();
-
-        let mut running = VecDeque::with_capacity(concurrent_limit);
-        loop {
-            if running.len() < concurrent_limit {
-                self.schedule_jobs(concurrent_limit, &mut runners, &mut running);
-            }
-
-            if running.is_empty() {
-                break;
-            }
-
-            if let Some(mut runner) = running.pop_front() {
-                if runner.try_ready() {
-                    let runner = runner.finish();
-                    _push_finished_and_report!(runner, self);
-                } else {
-                    running.push_back(runner);
-                }
-            }
-
-            thread::sleep(Duration::from_millis(100));
-        }
+        self.scheduler.run();
 
         let header = self.report_header();
-
         let report_path = self.save_html_report(&self.log_path, &header)?;
 
         if self.should_fail() {
@@ -125,6 +86,7 @@ impl ContinuousIntegration {
             .create(&self.log_path)
             .map_err(Error::LogDirectory)
     }
+
     fn update(&mut self) -> Result<()> {
         let git_config = self.config.git();
         if git_config.should_update() {
@@ -147,32 +109,15 @@ impl ContinuousIntegration {
     }
 
     fn should_fail(&self) -> bool {
-        self.finished.iter().any(|runner| !runner.success())
-    }
-
-    fn schedule_jobs(
-        &mut self,
-        concurrent_limit: usize,
-        waiting: &mut Vec<Runner<New>>,
-        running: &mut VecDeque<Runner<Running>>,
-    ) {
-        while !waiting.is_empty() && running.len() < concurrent_limit {
-            if let Some(runner) = waiting.pop() {
-                println!("{}", runner.report_console());
-                match runner.run() {
-                    Ok(runner) => running.push_back(runner),
-                    Err(runner) => _push_finished_and_report!(runner, self),
-                }
-            }
-        }
+        self.scheduler.finished().any(|runner| !runner.success())
     }
 
     fn save_html_report(&self, log_path: &Path, header: &str) -> Result<PathBuf> {
         let mut template = include_str!("../template/report.html").to_string();
 
         let rows = self
-            .finished
-            .iter()
+            .scheduler
+            .finished()
             .map(|r| r.report_html(self.config.host(), self.config.log_path()))
             .collect::<String>();
 
@@ -191,14 +136,14 @@ impl ContinuousIntegration {
     }
 
     fn report_header(&self) -> String {
-        let success = self.finished.iter().filter(|r| r.success()).count();
+        let success = self.scheduler.finished().filter(|r| r.success()).count();
 
         format!(
             "OVN CI - {} - {} - Success ({}) - Failure ({})",
             DateTime::from(SystemTime::now()).format("%d %B %Y"),
             Arch::get().name(),
             success,
-            (self.finished.len() - success)
+            (self.scheduler.finished().count() - success)
         )
     }
 }
