@@ -94,6 +94,8 @@ impl<'a> Vm<'a> {
         Command::new("virt-install")
             .arg("--name")
             .arg("base")
+            .arg("--boot")
+            .arg("uefi")
             .arg("--memory")
             .arg(self.config.vm().memory().to_string())
             .arg("--vcpus")
@@ -179,14 +181,12 @@ impl<'a> Vm<'a> {
     }
 
     pub fn destroy(&mut self) {
-        let mut undefine = Command::new("virsh");
-        undefine.arg("undefine");
-
-        if self.arch == Arch::Arm64 {
-            undefine.arg("--nvram");
-        }
-
-        if let Err(e) = undefine.arg("base").output() {
+        if let Err(e) = Command::new("virsh")
+            .arg("undefine")
+            .arg("--nvram")
+            .arg("base")
+            .output()
+        {
             eprintln!("Couldn't destroy base VM: {}", e);
         }
     }

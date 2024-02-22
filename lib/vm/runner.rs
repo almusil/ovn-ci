@@ -13,9 +13,13 @@ pub const VM_XML: &str = include_str!("../../vm/vm.xml");
 pub const VM_PREFIX: &str = "ovn-ci-vm";
 pub const NET_SUFFIX_OFFSET: usize = 10;
 #[cfg(target_arch = "aarch64")]
-pub const VM_EXTRA_ARGS: &str = r#"<loader readonly="yes" type="pflash">/usr/share/AAVMF/AAVMF_CODE.fd</loader>\n<nvram template="/usr/share/AAVMF/AAVMF_VARS.fd"/>"#;
-#[cfg(not(any(target_arch = "aarch64")))]
-pub const VM_EXTRA_ARGS: &str = "";
+pub const UEFI_CODE: &str = "/usr/share/AAVMF/AAVMF_CODE.fd";
+#[cfg(target_arch = "aarch64")]
+pub const UEFI_VARS: &str = "/usr/share/AAVMF/AAVMF_VARS.fd";
+#[cfg(target_arch = "x86_64")]
+pub const UEFI_CODE: &str = "/usr/share/OVMF/OVMF_CODE.fd";
+#[cfg(target_arch = "x86_64")]
+pub const UEFI_VARS: &str = "/usr/share/OVMF/OVMF_VARS.fd";
 pub const READY_STRING: &str = "Ready!";
 const SSH_COMMON_ARGUMENTS: [&str; 11] = [
     "-4",
@@ -31,6 +35,15 @@ const SSH_COMMON_ARGUMENTS: [&str; 11] = [
     "ConnectionAttempts=60",
 ];
 
+macro_rules! _ignore_not_found {
+    ($expr:expr) => {
+        match $expr {
+            Err(e) if e.kind() == IoErrorKind::NotFound => Ok(()),
+            result => result,
+        }
+    };
+}
+
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(ThisError, Debug)]
@@ -41,8 +54,8 @@ pub enum Error {
     AlreadyRunning(String),
     #[error("Cannot create VM XML: {0}")]
     VmXml(#[source] IoError),
-    #[error("Cannot remove old image: {0}")]
-    RemoveImage(#[source] IoError),
+    #[error("Cannot remove old VM data ({0}): {1}")]
+    Cleanup(String, #[source] IoError),
     #[error("Cannot create image from base: {0}")]
     CreateImage(String),
     #[error("Cannot create VM: {0}")]
@@ -85,6 +98,10 @@ impl Vm {
 
         let base_image = format!("{LIB_PATH}/{BASE_IMAGE}");
         let xml_path = format!("{LIB_PATH}/{}.xml", &self.name);
+        let nvram_path = format!("{LIB_PATH}/{}_VARS.fd", &self.name);
+
+        let cleanup_paths = [xml_path.as_str(), nvram_path.as_str(), self.image.as_str()];
+        Vm::pre_run_cleanup(&cleanup_paths)?;
 
         let vm_xml = VM_XML
             .replace("@VM_NAME@", &self.name)
@@ -94,16 +111,12 @@ impl Vm {
             .replace("@MACHINE@", self.arch.machine())
             .replace("@ROOTDISK@", &self.image)
             .replace("@MAC_SUFFIX@", &format!("{:02x}", self.net_suffix))
-            .replace("@EXTRA_ARGS@", VM_EXTRA_ARGS)
+            .replace("@UEFI_CODE@", UEFI_CODE)
+            .replace("@UEFI_VARS@", UEFI_VARS)
+            .replace("@NVRAM_PATH@", &nvram_path)
             .replace("@LOG_PATH@", &format!("{}/vm.log", &self.log_path));
 
         fs::write(&xml_path, vm_xml).map_err(Error::VmXml)?;
-
-        match fs::remove_file(&self.image) {
-            Err(e) if e.kind() == IoErrorKind::NotFound => Ok(()),
-            result => result,
-        }
-        .map_err(Error::RemoveImage)?;
 
         Command::new("qemu-img")
             .arg("create")
@@ -214,6 +227,15 @@ impl Vm {
         ssh.args(command.get_args());
 
         ssh
+    }
+
+    fn pre_run_cleanup(paths: &[&str]) -> Result<()> {
+        for path in paths.iter() {
+            _ignore_not_found!(fs::remove_file(path))
+                .map_err(|e| Error::Cleanup(path.to_string(), e))?;
+        }
+
+        Ok(())
     }
 }
 
