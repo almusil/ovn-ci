@@ -6,8 +6,12 @@
     <os>
         <type arch='@ARCH@' machine='@MACHINE@'>hvm</type>
         <bootmenu enable='no'/>
-        @EXTRA_ARGS@
+        <loader readonly="yes" type="pflash">@UEFI_CODE@</loader>
+        <nvram template="@UEFI_VARS@">@NVRAM_PATH@</nvram>
     </os>
+    <features>
+        <acpi/>
+    </features>
     <cpu mode='host-passthrough' check='none'/>
     <clock offset='utc'>
         <timer name='kvmclock'/>

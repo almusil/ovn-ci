@@ -13,7 +13,7 @@ function install_dependencies() {
     echo "Installing dependencies..."
 
     dnf -y install podman git nginx mailx @virtualization seavgabios-bin \
-                   guestfs-tools
+                   guestfs-tools edk2-ovmf edk2-aarch64
 }
 
 function setup_workspace() {
