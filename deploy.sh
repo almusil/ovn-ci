@@ -85,6 +85,11 @@ function setup_selinux() {
     rm -f /tmp/virtlogd.mod /tmp/virtlogd.pp
 }
 
+function setup_firewalld() {
+    firewall-cmd --permanent --add-port=8080/tcp
+    firewall-cmd --reload
+}
+
 function create_ssh_key() {
     if [ ! -s /etc/ovn-ci/id_ed25519 ]; then
       ssh-keygen -t ed25519 -f /etc/ovn-ci/id_ed25519 -N ""
@@ -121,6 +126,7 @@ fi
 setup_nginx
 compile_ovn_ci
 install_services
+setup_firewalld
 create_directories
 setup_selinux
 create_ssh_key
