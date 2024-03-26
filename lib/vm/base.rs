@@ -155,7 +155,9 @@ impl<'a> Vm<'a> {
                 .arg("--run-command")
                 .arg(format!("podman pull {}", image_name))
                 .arg("--run-command")
-                .arg(format!("podman tag {} ovn-org/ovn-tests", image_name));
+                .arg(format!("podman tag {} ovn-org/ovn-tests", image_name))
+                .arg("--run-command")
+                .arg("podman image prune -f");
         }
 
         command
