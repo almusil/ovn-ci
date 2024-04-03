@@ -4,7 +4,7 @@ set -o pipefail
 OVN_REPO=${OVN_REPO:-"https://github.com/ovn-org/ovn.git"}
 OVN_BRANCH=${OVN_BRANCH:-"main"}
 OVS_REPO=${OVS_REPO:-"https://github.com/openvswitch/ovs.git"}
-OVS_BRANCH=${OVS_BRANCH:-"master"}
+OVS_BRANCH=${OVS_BRANCH:-"main"}
 LOG_PATH=${LOG_PATH:-"/var/log/ovn-ci"}
 HOSTNAME=${HOSTNAME:-$(hostname)}
 USE_SUBMODULE=${USE_SUBMODULE:-"yes"}
