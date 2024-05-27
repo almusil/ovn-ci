@@ -8,7 +8,7 @@ use thiserror::Error as ThisError;
 
 use crate::util::{Arch, OutputExt};
 use crate::vm::{BASE_IMAGE, LIB_PATH};
-use crate::Configuration;
+use crate::{ignore_not_found, Configuration};
 
 const KICKSTART_NAME: &str = "base.ks";
 const FEDORA_KICKSTART: &str = include_str!("../../vm/fedora.ks.in");
@@ -71,11 +71,7 @@ impl<'a> Vm<'a> {
 
         fs::write(&self.kickstart, kickstart).map_err(Error::Kickstart)?;
 
-        match fs::remove_file(&self.base_image) {
-            Err(e) if e.kind() == IoErrorKind::NotFound => Ok(()),
-            result => result,
-        }
-        .map_err(Error::RemoveImage)?;
+        ignore_not_found!(fs::remove_file(&self.base_image)).map_err(Error::RemoveImage)?;
 
         Command::new("qemu-img")
             .arg("create")

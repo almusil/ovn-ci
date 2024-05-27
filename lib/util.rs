@@ -1,5 +1,15 @@
 use std::process::Output;
 
+#[macro_export]
+macro_rules! ignore_not_found {
+    ($expr:expr) => {
+        match $expr {
+            Err(e) if e.kind() == IoErrorKind::NotFound => Ok(()),
+            result => result,
+        }
+    };
+}
+
 pub trait OutputExt {
     fn status_ok(&self) -> Result<(), String>;
 
