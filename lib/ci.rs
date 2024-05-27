@@ -1,5 +1,7 @@
+use std::fs;
 use std::fs::{DirBuilder, File};
-use std::io::{Error as IoError, Write};
+use std::io::{Error as IoError, ErrorKind as IoErrorKind, Write};
+use std::os::unix;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -9,6 +11,7 @@ use thiserror::Error as ThisError;
 use crate::config::Configuration;
 use crate::email::{Error as EmailError, Report as EmailReport};
 use crate::git::{Error as GitError, Git};
+use crate::ignore_not_found;
 use crate::scheduler::Scheduler;
 use crate::util::Arch;
 use crate::vm::{BaseVm, BaseVmError};
@@ -68,6 +71,7 @@ impl ContinuousIntegration {
 
         let header = self.report_header();
         let report_path = self.save_html_report(&self.log_path, &header)?;
+        self.create_latest_symlink()?;
 
         if self.should_fail() {
             if let Some(email) = self.config.email() {
@@ -133,6 +137,14 @@ impl ContinuousIntegration {
             .map_err(Error::HtmlReport)?;
 
         Ok(path)
+    }
+
+    fn create_latest_symlink(&self) -> Result<()> {
+        let mut latest_path = PathBuf::from(self.config.log_path());
+        latest_path.push("latest");
+
+        ignore_not_found!(fs::remove_file(&latest_path)).map_err(Error::LogDirectory)?;
+        unix::fs::symlink(&self.log_path, latest_path).map_err(Error::LogDirectory)
     }
 
     fn report_header(&self) -> String {
