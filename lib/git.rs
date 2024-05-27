@@ -17,6 +17,8 @@ pub enum Error {
     SubmoduleUpdate(String, String),
     #[error("Cannot update project \"{0}\": {1}")]
     Update(String, String),
+    #[error("Cannot determine commit hash \"{0}\": {1}")]
+    CommitHash(String, String),
 }
 
 pub struct Git<'a> {
@@ -37,6 +39,20 @@ impl<'a> Git<'a> {
         }
 
         Ok(())
+    }
+
+    pub fn commit_hash(&self) -> Result<String> {
+        let stdout = Command::new("git")
+            .arg("rev-parse")
+            .arg("HEAD")
+            .current_dir(self.path)
+            .output()?
+            .stdout()
+            .map_err(|e| Error::CommitHash(self.path.to_string(), e))?
+            .trim_end()
+            .to_string();
+
+        Ok(stdout)
     }
 
     fn submodule_parent(&self) -> Result<String> {

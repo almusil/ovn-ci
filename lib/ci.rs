@@ -117,6 +117,9 @@ impl ContinuousIntegration {
     }
 
     fn save_html_report(&self, log_path: &Path, header: &str) -> Result<PathBuf> {
+        let git_config = self.config.git();
+        let ovn_hash = Git::new(git_config.ovn_path()).commit_hash()?;
+        let ovs_hash = Git::new(git_config.ovs_path()).commit_hash()?;
         let mut template = include_str!("../template/report.html").to_string();
 
         let rows = self
@@ -127,6 +130,10 @@ impl ContinuousIntegration {
 
         template = template.replace("@ROWS@", &rows);
         template = template.replace("@HEADER@", header);
+        template = template.replace("@OVN_HASH@", &ovn_hash);
+        template = template.replace("@OVN_HASH_SHORT@", &ovn_hash[..12]);
+        template = template.replace("@OVS_HASH@", &ovs_hash);
+        template = template.replace("@OVS_HASH_SHORT@", &ovs_hash[..12]);
 
         let mut path = log_path.to_path_buf();
         path.push("report.html");
