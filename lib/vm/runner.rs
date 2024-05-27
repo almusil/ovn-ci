@@ -6,6 +6,7 @@ use std::process::{Child, Command, Output};
 
 use thiserror::Error as ThisError;
 
+use crate::ignore_not_found;
 use crate::util::{Arch, OutputExt};
 use crate::vm::{BASE_IMAGE, LIB_PATH};
 
@@ -34,15 +35,6 @@ const SSH_COMMON_ARGUMENTS: [&str; 11] = [
     "-o",
     "ConnectionAttempts=60",
 ];
-
-macro_rules! _ignore_not_found {
-    ($expr:expr) => {
-        match $expr {
-            Err(e) if e.kind() == IoErrorKind::NotFound => Ok(()),
-            result => result,
-        }
-    };
-}
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -231,7 +223,7 @@ impl Vm {
 
     fn pre_run_cleanup(paths: &[&str]) -> Result<()> {
         for path in paths.iter() {
-            _ignore_not_found!(fs::remove_file(path))
+            ignore_not_found!(fs::remove_file(path))
                 .map_err(|e| Error::Cleanup(path.to_string(), e))?;
         }
 
