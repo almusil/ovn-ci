@@ -179,6 +179,7 @@ enum SuiteType {
     Unit,
     System,
     SystemUserspace,
+    SystemDpdk,
 }
 
 impl SuiteType {
@@ -187,6 +188,7 @@ impl SuiteType {
             SuiteType::Unit => "test",
             SuiteType::System => "system-test",
             SuiteType::SystemUserspace => "system-test-userspace",
+            SuiteType::SystemDpdk => "system-test-dpdk",
         }
     }
 
@@ -195,6 +197,14 @@ impl SuiteType {
             SuiteType::Unit => "unit",
             SuiteType::System => "system",
             SuiteType::SystemUserspace => "system-userspace",
+            SuiteType::SystemDpdk => "system-dpdk",
+        }
+    }
+
+    fn extra_env(&self) -> Option<(&str, &str)> {
+        match self {
+            SuiteType::Unit | SuiteType::System | SuiteType::SystemUserspace => None,
+            SuiteType::SystemDpdk => Some(("DPDK", "dpdk")),
         }
     }
 }
@@ -234,6 +244,10 @@ impl Suite {
 
         if let Some(ty) = &self.suite_type {
             envs.push(("TESTSUITE", ty.as_str()));
+
+            if let Some(extra) = ty.extra_env() {
+                envs.push(extra);
+            }
         }
 
         if self.sanitizers {
