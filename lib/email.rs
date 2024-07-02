@@ -30,9 +30,15 @@ impl Report {
 
         command
             .arg("-s")
-            .arg(format!("{}\r\nContent-Type: text/html", header))
+            .arg(header)
+            .arg("-M")
+            .arg("text/html")
             .arg("-S")
-            .arg(format!("smtp={}", config.smtp()))
+            .arg("v15-compat=yes")
+            .arg("-S")
+            .arg("smtp-auth=none")
+            .arg("-S")
+            .arg(format!("mta=smtp://{}", config.smtp()))
             .arg("-S")
             .arg(format!("replyto={}", config.reply_to()))
             .arg("-r")
