@@ -96,10 +96,26 @@ function create_ssh_key() {
     fi
 }
 
+function configure_modular_libvirt() {
+    echo "Configuring libvirt as modular..."
+
+    systemctl stop libvirtd.service
+    systemctl stop libvirtd{,-ro,-admin,-tcp,-tls}.socket
+
+    systemctl disable libvirtd.service
+    systemctl disable libvirtd{,-ro,-admin,-tcp,-tls}.socket
+
+    for drv in qemu interface network nodedev nwfilter secret storage; do
+      systemctl enable virt${drv}d.service
+      systemctl enable virt${drv}d{,-ro,-admin}.socket
+      systemctl start virt${drv}d{,-ro,-admin}.socket
+    done
+}
+
 function start_services() {
     echo "Starting services..."
 
-    for service in nginx.service ovn-ci.timer libvirtd.service; do
+    for service in nginx.service ovn-ci.timer; do
         systemctl enable $service
         systemctl start $service
     done
@@ -130,5 +146,6 @@ setup_firewalld
 create_directories
 setup_selinux
 create_ssh_key
+configure_modular_libvirt
 start_services
 define_vm_network
