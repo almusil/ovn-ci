@@ -29,7 +29,6 @@
             <mac address="52:00:00:00:00:@MAC_SUFFIX@"/>
             <source network="ovn-ci-isolated"/>
             <model type="virtio"/>
-            <driver name="vhost" queues="2"/>
         </interface>
         <channel type='unix'>
             <source mode='bind'/>
