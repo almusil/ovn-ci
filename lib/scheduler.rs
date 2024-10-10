@@ -26,7 +26,14 @@ impl Scheduler {
         let mut cpu_intensive = Vec::new();
 
         for (i, suite) in config.suites().iter().enumerate() {
-            let runner = Runner::new(i, config.vm().memory(), config.jobs(), suite, log_path);
+            let runner = Runner::new(
+                i,
+                config.vm().memory(),
+                config.jobs(),
+                config.timeout(),
+                suite,
+                log_path,
+            );
 
             if cpu_intensive_limit > 0 && suite.is_cpu_intensive() {
                 cpu_intensive.push(runner);

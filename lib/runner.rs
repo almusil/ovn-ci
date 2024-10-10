@@ -1,4 +1,4 @@
-use std::fs::{DirBuilder, File, OpenOptions};
+use std::fs::{DirBuilder, File};
 use std::io::{Error as IoError, Write as _};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
@@ -66,7 +66,14 @@ pub struct Runner<S> {
 }
 
 impl Runner<New> {
-    pub fn new(index: usize, memory: u32, jobs: usize, suite: &Suite, log_path: &Path) -> Self {
+    pub fn new(
+        index: usize,
+        memory: u32,
+        jobs: usize,
+        timeout: &str,
+        suite: &Suite,
+        log_path: &Path,
+    ) -> Self {
         let name = suite.name();
 
         let mut log_path = PathBuf::from(log_path);
@@ -82,6 +89,7 @@ impl Runner<New> {
             .arg("--ovs-path=/workspace/ovs")
             .arg(format!("--jobs={jobs}"))
             .arg("--archive-logs")
+            .arg(format!("--timeout={timeout}"))
             .envs(suite.envs());
 
         let vm = RunnerVm::new(index, memory, jobs, log_path.to_string_lossy());

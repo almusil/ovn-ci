@@ -25,7 +25,10 @@ pub struct Configuration {
     host: String,
     #[serde(default)]
     image_name: Option<String>,
+    #[serde(default)]
     concurrent_limit: Option<usize>,
+    #[serde(default)]
+    timeout: Option<String>,
     git: Git,
     #[serde(default)]
     email: Option<Email>,
@@ -58,6 +61,10 @@ impl Configuration {
 
     pub fn concurrent_limit(&self) -> Option<usize> {
         self.concurrent_limit
+    }
+
+    pub fn timeout(&self) -> &str {
+        self.timeout.as_deref().unwrap_or("0")
     }
 
     pub fn git(&self) -> &Git {
