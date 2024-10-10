@@ -1,5 +1,5 @@
-use std::fs::{DirBuilder, File};
-use std::io::Error as IoError;
+use std::fs::{DirBuilder, File, OpenOptions};
+use std::io::{Error as IoError, Write as _};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::time::{Duration, Instant};
@@ -13,6 +13,8 @@ use crate::vm::{RunnerVm, RunnerVmError};
 pub enum Error {
     #[error("Cannot create log file: {0}")]
     LogFile(#[source] IoError),
+    #[error("Cannot write to log file: {0}")]
+    LogWrite(#[source] IoError),
     #[error("Cannot create log directory: {0}")]
     LogDirectory(#[source] IoError),
     #[error("VM error: {0}")]
@@ -28,6 +30,12 @@ macro_rules! _runner_error {
         $e.map_err(|e| {
             Runner::<Finished>::new($self.name.clone(), $self.log_path.clone(), $start, Some(e))
         })
+    };
+}
+
+macro_rules! _log_write {
+    ($e: expr, $($arg:tt)*) => {
+        write!($e, $($arg)*).map_err(Error::LogWrite)
     };
 }
 
@@ -127,7 +135,30 @@ impl Runner<New> {
         let mut path = path.to_path_buf();
         path.push("ovn-ci.log");
 
-        File::create(path).map_err(Error::LogFile)
+        let mut file = File::create(path).map_err(Error::LogFile)?;
+
+        _log_write!(file, "Name: {}\nCommand:", self.name)?;
+
+        for (name, val) in self.state.command.get_envs() {
+            _log_write!(file, " {}", name.to_string_lossy())?;
+            if let Some(v) = val {
+                _log_write!(file, "={}", v.to_string_lossy())?;
+            }
+        }
+
+        _log_write!(
+            file,
+            " {}",
+            self.state.command.get_program().to_string_lossy()
+        )?;
+
+        for arg in self.state.command.get_args() {
+            _log_write!(file, " {}", arg.to_string_lossy())?;
+        }
+
+        _log_write!(file, "\n")?;
+
+        Ok(file)
     }
 }
 
