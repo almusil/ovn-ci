@@ -148,6 +148,10 @@ impl<'a> Vm<'a> {
 
         if let Some(image_name) = self.config.image_name() {
             command
+                .arg("--delete")
+                .arg("/run/containers/storage")
+                .arg("--delete")
+                .arg("/run/libpod")
                 .arg("--run-command")
                 .arg(format!("podman pull {}", image_name))
                 .arg("--run-command")
