@@ -221,7 +221,7 @@ impl<'a> Vm<'a> {
     }
 }
 
-impl<'a> Drop for Vm<'a> {
+impl Drop for Vm<'_> {
     fn drop(&mut self) {
         self.destroy();
     }
