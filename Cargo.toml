@@ -12,7 +12,7 @@ path = "lib/lib.rs"
 
 [dependencies]
 serde_yaml = "0.9"
-thiserror = "1.0"
+thiserror = "2.0"
 
 anyhow = { version = "1.0", features = ["backtrace"] }
 chrono = { version = "0.4", features = ["std"], default-features = false }
