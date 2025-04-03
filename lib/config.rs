@@ -187,6 +187,7 @@ enum SuiteType {
     System,
     SystemUserspace,
     SystemDpdk,
+    Dist,
 }
 
 impl SuiteType {
@@ -196,6 +197,7 @@ impl SuiteType {
             SuiteType::System => "system-test",
             SuiteType::SystemUserspace => "system-test-userspace",
             SuiteType::SystemDpdk => "system-test-dpdk",
+            SuiteType::Dist => "dist-test",
         }
     }
 
@@ -205,12 +207,15 @@ impl SuiteType {
             SuiteType::System => "system",
             SuiteType::SystemUserspace => "system-userspace",
             SuiteType::SystemDpdk => "system-dpdk",
+            SuiteType::Dist => "dist",
         }
     }
 
     fn extra_env(&self) -> Option<(&str, &str)> {
         match self {
-            SuiteType::Unit | SuiteType::System | SuiteType::SystemUserspace => None,
+            SuiteType::Unit | SuiteType::System | SuiteType::SystemUserspace | SuiteType::Dist => {
+                None
+            }
             SuiteType::SystemDpdk => Some(("DPDK", "dpdk")),
         }
     }
@@ -322,6 +327,9 @@ impl Suite {
     }
 
     pub fn is_cpu_intensive(&self) -> bool {
-        matches!(self.suite_type, None | Some(SuiteType::Unit))
+        matches!(
+            self.suite_type,
+            None | Some(SuiteType::Unit) | Some(SuiteType::Dist)
+        )
     }
 }
