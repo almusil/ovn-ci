@@ -2,8 +2,8 @@ use std::path::Path;
 use std::thread;
 use std::time::Duration;
 
-use crate::runner::{Finished, New, Runner, Running};
 use crate::Configuration;
+use crate::runner::{Finished, New, Runner, Running};
 
 #[derive(Debug)]
 pub struct Scheduler {

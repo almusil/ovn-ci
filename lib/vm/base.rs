@@ -8,7 +8,7 @@ use thiserror::Error as ThisError;
 
 use crate::util::{Arch, OutputExt};
 use crate::vm::{BASE_IMAGE, LIB_PATH};
-use crate::{ignore_not_found, Configuration};
+use crate::{Configuration, ignore_not_found};
 
 const KICKSTART_NAME: &str = "base.ks";
 const FEDORA_KICKSTART: &str = include_str!("../../vm/fedora.ks.in");

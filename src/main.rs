@@ -9,7 +9,7 @@ fn main() -> Result<()> {
     #[cfg(debug_assertions)]
     {
         if env::var("RUST_BACKTRACE").is_err() {
-            env::set_var("RUST_BACKTRACE", "1");
+            unsafe { env::set_var("RUST_BACKTRACE", "1") };
         }
     }
 
