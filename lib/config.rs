@@ -29,6 +29,8 @@ pub struct Configuration {
     concurrent_limit: Option<usize>,
     #[serde(default)]
     timeout: Option<String>,
+    #[serde(default)]
+    cli_report_binary: Option<String>,
     git: Git,
     #[serde(default)]
     email: Option<Email>,
@@ -61,6 +63,10 @@ impl Configuration {
 
     pub fn concurrent_limit(&self) -> Option<usize> {
         self.concurrent_limit
+    }
+
+    pub fn cli_report_binary(&self) -> Option<&str> {
+        self.cli_report_binary.as_deref()
     }
 
     pub fn timeout(&self) -> &str {

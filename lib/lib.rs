@@ -1,4 +1,5 @@
 mod ci;
+mod cli_report;
 mod config;
 mod email;
 mod git;
