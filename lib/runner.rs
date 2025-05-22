@@ -214,6 +214,10 @@ impl Runner<Finished> {
         self.state.error.is_none()
     }
 
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     pub fn report_console(&self) -> String {
         let mut report = format!(
             "The job \"{}\" is done. Duration: {}, Status: ",
