@@ -8,6 +8,8 @@ OVS_BRANCH=${OVS_BRANCH:-"main"}
 LOG_PATH=${LOG_PATH:-"/var/log/ovn-ci"}
 HOSTNAME=${HOSTNAME:-$(hostname)}
 USE_SUBMODULE=${USE_SUBMODULE:-"yes"}
+RUST_IMAGE=${RUST_IMAGE:-"docker.io/library/rust"}
+RUST_FORCE_PULL=${RUST_FORCE_PULL:-"false"}
 
 function install_dependencies() {
     echo "Installing dependencies..."
@@ -48,7 +50,9 @@ function setup_nginx() {
 function compile_ovn_ci() {
     echo "Compiling ovn-ci..."
 
-    podman pull docker.io/library/rust
+    if [[ "$RUST_FORCE_PULL" = "true" ]] || ! podman image exists $RUST_IMAGE; then
+        podman pull $RUST_IMAGE
+    fi
     podman run --privileged \
     --rm \
     --user "$(id -u)":"$(id -g)" \
