@@ -70,7 +70,7 @@ impl Runner<New> {
         index: usize,
         memory: u32,
         jobs: usize,
-        timeout: &str,
+        timeout: Option<&str>,
         suite: &Suite,
         log_path: &Path,
     ) -> Self {
@@ -89,8 +89,11 @@ impl Runner<New> {
             .arg("--ovs-path=/workspace/ovs")
             .arg(format!("--jobs={jobs}"))
             .arg("--archive-logs")
-            .arg(format!("--timeout={timeout}"))
             .envs(suite.envs());
+
+        if let Some(timeout_str) = timeout {
+            command.arg(format!("--timeout={timeout_str}"));
+        }
 
         let vm = RunnerVm::new(index, memory, jobs, log_path.to_string_lossy());
 
