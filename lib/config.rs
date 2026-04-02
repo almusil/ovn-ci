@@ -69,8 +69,8 @@ impl Configuration {
         self.cli_report_binary.as_deref()
     }
 
-    pub fn timeout(&self) -> &str {
-        self.timeout.as_deref().unwrap_or("0")
+    pub fn timeout(&self) -> Option<&str> {
+        self.timeout.as_deref()
     }
 
     pub fn git(&self) -> &Git {
