@@ -5,7 +5,7 @@ timezone --utc UTC
 selinux --enforcing
 firewall --enabled --service=ssh
 services --enabled=sshd,NetworkManager,chronyd
-network --bootproto=dhcp --device=link --activate
+network --bootproto=dhcp --activate
 rootpw --plaintext 123456
 shutdown
 
