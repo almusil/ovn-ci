@@ -212,6 +212,7 @@ impl Vm {
         let mut ssh = Command::new("ssh");
 
         ssh.args(SSH_COMMON_ARGUMENTS)
+            .arg("-n")
             .arg(format!("root@192.168.100.{}", self.net_suffix));
 
         ssh.args(command.get_envs().map(map_envs));
