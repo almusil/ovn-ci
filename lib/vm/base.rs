@@ -97,13 +97,13 @@ impl<'a> Vm<'a> {
             .arg("--vcpus")
             .arg(self.config.jobs().to_string())
             .arg("--disk")
-            .arg(format!("path={}", &self.base_image))
+            .arg(format!("path={}", self.base_image))
             .arg(format!("--location={}", mirror))
             .arg("--os-variant")
             .arg(format!("fedora{}", self.config.vm().release()))
             .arg("--hvm")
             .arg("--graphics=vnc")
-            .arg(format!("--initrd-inject={}", &self.kickstart))
+            .arg(format!("--initrd-inject={}", self.kickstart))
             .arg(format!(
                 "--extra-args=inst.ks=file:/{} console=ttyS0,115200",
                 KICKSTART_NAME

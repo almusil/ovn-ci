@@ -89,8 +89,8 @@ impl Vm {
         }
 
         let base_image = format!("{LIB_PATH}/{BASE_IMAGE}");
-        let xml_path = format!("{LIB_PATH}/{}.xml", &self.name);
-        let nvram_path = format!("{LIB_PATH}/{}_VARS.fd", &self.name);
+        let xml_path = format!("{LIB_PATH}/{}.xml", self.name);
+        let nvram_path = format!("{LIB_PATH}/{}_VARS.fd", self.name);
 
         let cleanup_paths = [xml_path.as_str(), nvram_path.as_str(), self.image.as_str()];
         Vm::pre_run_cleanup(&cleanup_paths)?;
@@ -106,7 +106,7 @@ impl Vm {
             .replace("@UEFI_CODE@", UEFI_CODE)
             .replace("@UEFI_VARS@", UEFI_VARS)
             .replace("@NVRAM_PATH@", &nvram_path)
-            .replace("@LOG_PATH@", &format!("{}/vm.log", &self.log_path));
+            .replace("@LOG_PATH@", &format!("{}/vm.log", self.log_path));
 
         fs::write(&xml_path, vm_xml).map_err(Error::VmXml)?;
 
