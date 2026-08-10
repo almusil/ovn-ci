@@ -31,13 +31,16 @@ function clone_repo() {
 
     echo "Cloning repo: $name (branch: $branch)..."
 
-    git clone $repo workspace/$name --branch $branch --single-branch --depth 1
+    git clone $repo workspace/$name --branch $branch --no-single-branch --depth 1
+    git -C "workspace/$name" branch -r | grep "branch-" | while read -r remote; do
+        git -C "workspace/$name" branch --track "${remote#origin/}" "$remote"
+    done
 }
 
 function init_submodule() {
     echo "Initializing OvS submodule in OVN..."
     cd workspace/ovn
-    git submodule update --init --single-branch --depth 1
+    git submodule update --init
     cd -
 }
 

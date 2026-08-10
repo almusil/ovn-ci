@@ -194,6 +194,7 @@ enum SuiteType {
     SystemUserspace,
     SystemDpdk,
     Dist,
+    Upgrade,
 }
 
 impl SuiteType {
@@ -204,6 +205,7 @@ impl SuiteType {
             SuiteType::SystemUserspace => "system-test-userspace",
             SuiteType::SystemDpdk => "system-test-dpdk",
             SuiteType::Dist => "dist-test",
+            SuiteType::Upgrade => "upgrade-test",
         }
     }
 
@@ -214,14 +216,17 @@ impl SuiteType {
             SuiteType::SystemUserspace => "system-userspace",
             SuiteType::SystemDpdk => "system-dpdk",
             SuiteType::Dist => "dist",
+            SuiteType::Upgrade => "upgrade",
         }
     }
 
     fn extra_env(&self) -> Option<(&str, &str)> {
         match self {
-            SuiteType::Unit | SuiteType::System | SuiteType::SystemUserspace | SuiteType::Dist => {
-                None
-            }
+            SuiteType::Unit
+            | SuiteType::System
+            | SuiteType::SystemUserspace
+            | SuiteType::Dist
+            | SuiteType::Upgrade => None,
             SuiteType::SystemDpdk => Some(("DPDK", "dpdk")),
         }
     }
@@ -244,6 +249,8 @@ pub struct Suite {
     test_range: Option<String>,
     #[serde(default)]
     libs: Option<String>,
+    #[serde(default)]
+    base_branch: Option<String>,
     #[serde(default)]
     unstable: bool,
     #[serde(default)]
@@ -288,6 +295,10 @@ impl Suite {
             envs.push(("RECHECK", "yes"));
         }
 
+        if let Some(base) = &self.base_branch {
+            envs.push(("BASE_VERSION", base.as_str()));
+        }
+
         envs
     }
 
@@ -297,6 +308,11 @@ impl Suite {
         if let Some(ty) = self.suite_type {
             name.push_str(" - ");
             name.push_str(ty.as_name());
+        }
+
+        if let Some(base) = &self.base_branch {
+            name.push(' ');
+            name.push_str(base);
         }
 
         if let Some(range) = &self.test_range {
