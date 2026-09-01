@@ -176,6 +176,10 @@ impl Vm {
         }
     }
 
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     fn is_running(&self) -> Result<bool> {
         let stdout = Command::new("virsh")
             .arg("list")
