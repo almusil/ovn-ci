@@ -89,6 +89,9 @@ function setup_selinux() {
     semanage fcontext -a -t httpd_sys_content_t "$LOG_PATH(/.*)?" || true
     restorecon -R $LOG_PATH
 
+    semanage fcontext -a -t virt_image_t '/var/lib/ovn-ci(/.*)?' || true
+    restorecon -R /var/lib/ovn-ci
+
     rm -f /tmp/virtlogd.mod /tmp/virtlogd.pp
 }
 
