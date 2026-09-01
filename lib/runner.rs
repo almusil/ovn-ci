@@ -106,9 +106,10 @@ impl Runner<New> {
 
     pub fn report_console(&self) -> String {
         format!(
-            "The job \"{}\" is starting, log file: {}/ovn-ci.log",
+            "The job \"{}\" ({}) is starting, log file: {}/ovn-ci.log",
             self.name,
-            self.log_path.to_string_lossy()
+            self.state.vm.name(),
+            self.log_path.to_string_lossy(),
         )
     }
 
