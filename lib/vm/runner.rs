@@ -22,6 +22,7 @@ pub const UEFI_CODE: &str = "/usr/share/OVMF/OVMF_CODE.fd";
 #[cfg(target_arch = "x86_64")]
 pub const UEFI_VARS: &str = "/usr/share/OVMF/OVMF_VARS.fd";
 pub const READY_STRING: &str = "Ready!";
+const START_RETRIES: usize = 5;
 const SSH_COMMON_ARGUMENTS: [&str; 11] = [
     "-4",
     "-i",
@@ -50,10 +51,8 @@ pub enum Error {
     Cleanup(String, #[source] IoError),
     #[error("Cannot create image from base: {0}")]
     CreateImage(String),
-    #[error("Cannot create VM: {0}")]
-    CreateVm(String),
-    #[error("VM \"{0}\" ready check failed: {1}")]
-    VmReadyCheck(String, String),
+    #[error("Failed to create VM")]
+    CreateVm,
     #[error("Cannot clone log file descriptor: {0}")]
     LogFileDescriptor(#[source] IoError),
 }
@@ -124,20 +123,19 @@ impl Vm {
             .status_ok()
             .map_err(Error::CreateImage)?;
 
-        Command::new("virsh")
-            .arg("create")
-            .arg(&xml_path)
-            .output()
-            .map_err(|e| Error::Command("virsh-create", e))?
-            .status_ok()
-            .map_err(Error::CreateVm)?;
+        for _ in 0..START_RETRIES {
+            self.create(&xml_path);
+            if self.is_ready() {
+                return Ok(());
+            }
+            self.destroy();
+            eprintln!("Trying to start {} VM again", self.name);
+        }
 
-        self.wait_start()?;
-
-        Ok(())
+        Err(Error::CreateVm)
     }
 
-    pub fn command_output(&mut self, command: &mut Command) -> Result<Output> {
+    pub fn command_output(&self, command: &mut Command) -> Result<Output> {
         let mut ssh = self.ssh(command);
         ssh.output().map_err(|e| Error::Command("ssh", e))
     }
@@ -166,18 +164,35 @@ impl Vm {
         Ok(())
     }
 
-    pub fn destroy(&mut self) {
-        if let Err(e) = Command::new("virsh")
-            .arg("destroy")
-            .arg(&self.name)
-            .output()
-        {
-            eprintln!("Couldn't destroy VM {}: {}", self.name, e);
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn create(&mut self, xml_path: &str) {
+        let result = Command::new("virsh").arg("create").arg(xml_path).output();
+        if let Err(e) = result {
+            eprintln!("Create VM error {}: {}", self.name, e);
+            return;
+        }
+
+        if let Err(e) = result.unwrap().status_ok() {
+            eprintln!("Create VM error {}: {}", self.name, e);
         }
     }
 
-    pub fn name(&self) -> &str {
-        &self.name
+    fn destroy(&mut self) {
+        let result = Command::new("virsh")
+            .arg("destroy")
+            .arg(&self.name)
+            .output();
+        if let Err(e) = result {
+            eprintln!("Destroy VM error {}: {}", self.name, e);
+            return;
+        }
+
+        if let Err(e) = result.unwrap().status_ok() {
+            eprintln!("Destroy VM error {}: {}", self.name, e);
+        }
     }
 
     fn is_running(&self) -> Result<bool> {
@@ -193,26 +208,26 @@ impl Vm {
         Ok(stdout.lines().any(|line| line == self.name))
     }
 
-    fn wait_start(&mut self) -> Result<()> {
+    fn is_ready(&self) -> bool {
         let mut echo = Command::new("echo");
         echo.arg(READY_STRING);
 
-        let output = self
-            .command_output(&mut echo)?
-            .stdout()
-            .map_err(|e| Error::VmReadyCheck(self.name.clone(), e))?;
+        let result = self.command_output(&mut echo);
+        if let Err(e) = result {
+            eprintln!("Waiting for VM error {}: {}", self.name, e);
+            return false;
+        }
 
-        if output.trim_end() == READY_STRING {
-            Ok(())
-        } else {
-            Err(Error::VmReadyCheck(
-                self.name.clone(),
-                "The ready string didn't match!".to_string(),
-            ))
+        match result.unwrap().stdout() {
+            Ok(stdout) => stdout.trim_end() == READY_STRING,
+            Err(stderr) => {
+                eprintln!("Waiting for VM error {}: {}", self.name, stderr);
+                false
+            }
         }
     }
 
-    fn ssh(&mut self, command: &mut Command) -> Command {
+    fn ssh(&self, command: &mut Command) -> Command {
         let mut ssh = Command::new("ssh");
 
         ssh.args(SSH_COMMON_ARGUMENTS)
